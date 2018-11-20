@@ -3,19 +3,9 @@ from os.path import isfile, join
 import multiprocessing as mp
 import time
 
+# ==== Global Variables ==== #
 mypath = './dataset/zinc_smiles'
 onlyfiles = [f for f in os.listdir(mypath) if isfile(join(mypath, f))]
-
-def download(url):
-
-
-    name = url.split('/')[-1]
-    name = name.strip()
-
-    if name not in onlyfiles:
-        os.system('wget -q -P {} {}'.format('./dataset/zinc_smiles', url))
-        return name, True
-    return name, False
 
 cnt_mol = 0
 cnt_file = 0
@@ -23,13 +13,19 @@ cnt_fail = 0
 total_file = 0
 ts = time.time()
 
+# ==== Downloading Function ==== #
+def download(url):
+    name = url.split('/')[-1].strip() # filename would be AAAC.smi, AEBC.smi ...
+    if name not in onlyfiles: # download file only when the file does not exist.
+        os.system('wget -q -P {} {}'.format('./dataset/zinc_smiles', url))
+        return name, True
+    return name, False
+
 def countline(filename):
     try:
         with open(filename) as file:
-            num_line = len(file.readlines())
-        return num_line
+            return len(file.readlines())
     except:
-        # print("counting failed")
         return 0
 
 def log_result(output):
