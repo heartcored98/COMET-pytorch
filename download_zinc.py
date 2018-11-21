@@ -6,7 +6,7 @@ import time
 from tqdm import tqdm
 
 # ==== Global Variables ==== #
-mypath = './dataset/zinc_smiles'
+mypath = './dataset/raw_zinc_smiles'
 onlyfiles = [f for f in os.listdir(mypath) if isfile(join(mypath, f))]
 
 cnt_mol = 0
@@ -19,8 +19,8 @@ ts = time.time()
 def download(url, onlyfiles):
     name = url.split('/')[-1].strip() # filename would be AAAC.smi, AEBC.smi ...
     if name not in onlyfiles: # download file only when the file does not exist.
-#         os.system('wget -q -P {} {}'.format('./dataset/zinc_smiles', url))
-        urllib.request.urlretrieve(url, './dataset/zinc_smiles/{}'.format(name))
+#         os.system('wget -q -P {} {}'.format('./dataset/raw_zinc_smiles', url))
+        urllib.request.urlretrieve(url, './dataset/raw_zinc_smiles/{}'.format(name))
         return name, True
     return name, False
 
@@ -34,7 +34,7 @@ def countline(filename):
 def log_result(output):
     name = output[0]
     flag = output[1]
-    cnt = countline('./dataset/zinc_smiles/{}'.format(name))
+    cnt = countline('./dataset/raw_zinc_smiles/{}'.format(name))
 
     global cnt_mol, cnt_file
     cnt_file += 1
@@ -62,8 +62,8 @@ def save_smi(start_offset=0, filename='ZINC-downloader-2D-smi.uri'):
         total_file = len(list_url)
 
     # Reset dataset folder
-    # os.system('rm -rf ./dataset/zinc_smiles')
-    # os.system('mkdir ./dataset/zinc_smiles')
+    # os.system('rm -rf ./dataset/raw_zinc_smiles')
+    # os.system('mkdir ./dataset/raw_zinc_smiles')
 
     # Start Downloading Process
     pool = mp.Pool(processes=10)
@@ -80,7 +80,7 @@ def save_smi(start_offset=0, filename='ZINC-downloader-2D-smi.uri'):
     print("=================================================================================")
 
 def count_mol():
-    mypath = './dataset/zinc_smiles'
+    mypath = './dataset/raw_zinc_smiles'
     onlyfiles = [f for f in os.listdir(mypath) if isfile(join(mypath, f))]
     print("=================================================================================")
     print("Counting Started!")

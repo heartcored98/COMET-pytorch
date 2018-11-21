@@ -38,7 +38,7 @@ def log_result(result):
 
 
 
-def process_dataset(dir_path='./dataset/zinc_smiles', start_offset=0, end_offset=-1):
+def process_dataset(dir_path='./dataset/raw_zinc_smiles', start_offset=0, end_offset=-1):
     ts = time.time()
 
     # Start Downloading Process
@@ -58,7 +58,7 @@ def process_dataset(dir_path='./dataset/zinc_smiles', start_offset=0, end_offset
 
 
 def count_mol():
-    mypath = './dataset/zinc_smiles'
+    mypath = './dataset/raw_zinc_smiles'
     onlyfiles = [f for f in os.listdir(mypath) if isfile(join(mypath, f))]
     print("=================================================================================")
     print("Counting Started!")
@@ -79,7 +79,7 @@ if __name__ == '__main__':
     parser.add_argument("-n", "--num_worker", help="number of co-working process", type=int, default=8)
     parser.add_argument("-s", "--start_offset", help="starting from i-th file in directory", type=int, default=0)
     parser.add_argument("-e", "--end_offset", help="end processing at i-th file in directory", type=int, default=1) #-1)
-    parser.add_argument("-d", "--dir_path", help="directory where dataset stored", type=str, default='./dataset/zinc_smiles')
+    parser.add_argument("-d", "--dir_path", help="directory where dataset stored", type=str, default='./dataset/raw_zinc_smiles')
     args = parser.parse_args()
 
     print(args)
