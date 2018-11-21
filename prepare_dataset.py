@@ -96,5 +96,6 @@ def count_mol():
 
 
 if __name__ == '__main__':
+    # TODO : add argparse option - num_process, start_offset, only_counting_option, filename, download directory
     save_smi(start_offset=0)
     count_mol()
