@@ -25,7 +25,7 @@ def process_file(filename):
         list_row = file.readlines()[1:]
 
     temp_row = list()
-    for row in list_row:
+    for row in tqdm(list_row):
         smi = row.split(' ')[0].strip()
         m = Chem.MolFromSmiles(smi)
         logP = MolLogP(m)
@@ -59,7 +59,8 @@ def process_dataset(chunk_size=10000, #500000,
     cnt_val_chunk = 0
     train_row_buffer = list()
     val_row_buffer = list()
-    for filename in list_file[start_offset:end_offset][:10]:
+    for idx, filename in enumerate(list_file[start_offset:end_offset][:10]):
+        print("Processing {}-th files".format(idx))
         data = process_file(join(raw_dir_path, filename))
         train_data, val_data = train_test_split(data,  test_size=test_size, random_state=111)
         train_row_buffer += train_data
