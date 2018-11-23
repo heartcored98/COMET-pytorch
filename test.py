@@ -5,6 +5,8 @@ import numpy as np
 import random
 from tqdm import tqdm
 
+from download_zinc import count_mol
+
 def write_record(records,
                  overwrite = False,
                  chunk_size = True,

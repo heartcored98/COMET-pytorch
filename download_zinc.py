@@ -93,6 +93,7 @@ def count_mol():
     print("=================================================================================")
     print("Counting Completed!   {} Molecular retrieved from {} files.".format(cnt_mol, len(onlyfiles)))
     print("=================================================================================")
+    return cnt_mol
 
 
 if __name__ == '__main__':
