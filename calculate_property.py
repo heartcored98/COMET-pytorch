@@ -4,12 +4,10 @@ from os.path import isfile, join
 import time
 import argparse
 from random import sample
-from tqdm import tqdm
-from rdkit import Chem, DataStructs
-from rdkit.Chem import AllChem
+from rdkit import Chem
 from sklearn.model_selection import train_test_split
 from rdkit.Chem.Crippen import MolLogP, MolMR
-from rdkit.Chem.rdMolDescriptors import CalcTPSA, CalcPBF
+from rdkit.Chem.rdMolDescriptors import CalcTPSA #,CalcPBF
 import pandas as df
 import re
 
@@ -31,13 +29,15 @@ def get_last_num(output_dir_path='./dataset/processed_zinc_smiles'):
     last_val_num = extract_num(val_list_file)
     return last_train_num, last_val_num
 
+
 def process_smile(row):
     try:
         smi = row.split(' ')[0].strip()
         m = Chem.MolFromSmiles(smi)
-        return (smi, MolLogP(m), MolMR(m), CalcTPSA(m), m.GetNumAtoms())
+        return smi, MolLogP(m), MolMR(m), CalcTPSA(m), m.GetNumAtoms()
     except:
-        return (None, None, None, None, None)
+        return None, None, None, None, None
+
 
 def process_dataset(chunk_size,
                     num_worker,
@@ -67,7 +67,7 @@ def process_dataset(chunk_size,
         m_ts = time.time()
         with open(join(raw_dir_path, filename)) as file:
             list_row = file.readlines()[1:]
-            sampled_list_row = sample(list_row, int(len(list_row)*sampling_rate))
+            sampled_list_row = sample(list_row, max(int(len(list_row)*sampling_rate), 1))
             with mp.Pool(processes=num_worker) as pool:
                 data = pool.map(process_smile, sampled_list_row)
         train_data, val_data = train_test_split(data,  test_size=test_size, random_state=111)
@@ -120,13 +120,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Add logP, TPSA, MR, PBF value on .smi files')
     parser.add_argument("-c", "--chunk_size", help="number of rows in one chunk ", type=int, default=25000000)
     parser.add_argument("-n", "--num_worker", help="number of co-working process", type=int, default=16)
-    parser.add_argument("-q", "--sampling_rate", help="number of co-working process", type=float, default=0.001)
+    parser.add_argument("-q", "--sampling_rate", help="number of co-working process", type=float, default=0.01)
+    parser.add_argument("-r", "--test_size", help="portion of validation_set", type=float, default=0.2)
+    parser.add_argument("-t", "--flag_continue", help="whether continue writing file", type=bool, default=False)
+
     parser.add_argument("-s", "--start_offset", help="starting from i-th file in directory", type=int, default=0)
     parser.add_argument("-e", "--end_offset", help="end processing at i-th file in directory", type=int, default=-1)
     parser.add_argument("-d", "--raw_dir_path", help="directory where dataset stored", type=str, default='./dataset/raw_zinc_smiles')
-    parser.add_argument("-o", "--output_dir_path", help="directory where processed data saved", type=str, default='./dataset/processed_zinc_smiles/data_xs')
-    parser.add_argument("-r", "--test_size", help="portion of validation_set", type=float, default=0.2)
-    parser.add_argument("-t", "--flag_continue", help="whether continue writing file", type=bool, default=False)
+    parser.add_argument("-o", "--output_dir_path", help="directory where processed data saved", type=str, default='./dataset/processed_zinc_smiles/data_s')
 
     args = parser.parse_args()
 
