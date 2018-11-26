@@ -4,8 +4,8 @@ from os.path import isfile, join
 import time
 import argparse
 from random import sample
-from rdkit import Chem
 from sklearn.model_selection import train_test_split
+from rdkit import Chem
 from rdkit.Chem.Crippen import MolLogP, MolMR
 from rdkit.Chem.rdMolDescriptors import CalcTPSA #,CalcPBF
 import pandas as df
