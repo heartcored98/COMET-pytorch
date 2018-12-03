@@ -12,4 +12,4 @@ print(extract_num('train 00001 .csv'))
 a = 5
 b = 4
 
-print('this is multi-gpu')
+print('this is multi-gpu2')
