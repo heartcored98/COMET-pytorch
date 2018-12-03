@@ -11,19 +11,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.autograd import Variable
-from torch.nn.parameter import Parameter
-from torch.utils import data
-from torch.utils.data import Dataset, DataLoader
-import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.utils import shuffle
 from tensorboardX import SummaryWriter
 
 
 from dataloader import *
 from utils import *
 
-parser = argparse.ArgumentParser()
 
 
 class Attention(nn.Module):
@@ -171,7 +164,7 @@ class Encoder(nn.Module):
         self.out_dim = args.out_dim
         
         self.gconvs = nn.ModuleList()
-        for i in range(args.num_layers):
+        for i in range(args.n_layer):
             if i==0:
                 self.gconvs.append(ResBlock(args.in_dim, self.out_dim, args.use_bn, args.use_attn, args.dp_rate, args.sc_type, args.n_attn_heads))
             else:
@@ -315,8 +308,7 @@ class NoamOpt:
             p['lr'] = rate
         self._rate = rate
         self.optimizer.step()
-        print(rate)
-        
+
     def rate(self, step = None):
         return self.factor * (self.model_size ** (-0.5) * min(step ** (-0.5), step * self.warmup ** (-1.5)))
     
@@ -406,7 +398,7 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
 
             # Prompting Status
             if cnt_iter % args.log_every == 0:
-                output = "[T] E:{:3}. P:{:>2.1f}%. Loss:{:>9.3}. Mask Loss:{:>9.3}. {:4.1f} mol/sec. Iter:{:6}.  Elapsed:{:6.1f} sec."
+                output = "[TRAIN] E:{:3}. P:{:>2.1f}%. Loss:{:>9.3}. Mask Loss:{:>9.3}. {:4.1f} mol/sec. Iter:{:6}.  Elapsed:{:6.1f} sec."
                 elapsed = time.time() - t
                 process_speed = (args.batch_size * args.log_every) / elapsed
                 output = output.format(epoch, batch_idx / len(dataloader['train']) * 100.0, loss, mask_loss, process_speed, cnt_iter, elapsed,)
@@ -470,7 +462,7 @@ def validate(models, data_loader, args, **kwargs):
 
             # Prompting Status
             if temp_iter % (args.log_every * 4) == 0:
-                output = "[V] E:{:3}. P:{:>2.1f}%. {:4.1f} mol/sec. Iter:{:6}.  Elapsed:{:6.1f} sec."
+                output = "[VALID] E:{:3}. P:{:>2.1f}%. {:4.1f} mol/sec. Iter:{:6}.  Elapsed:{:6.1f} sec."
                 elapsed = time.time() - t
                 process_speed = (args.test_batch_size * args.log_every) / elapsed
                 output = output.format(epoch, batch_idx / len(data_loader) * 100.0, process_speed, temp_iter, elapsed,)
@@ -561,7 +553,7 @@ def experiment(dataloader, args):
         epoch, cnt_iter, models, optimizer = load_checkpoint(models, optimizer, args.ck_filename, args)
         logger.info('Loaded Model from {}'.format(args.ck_filename))
     
-    optimizer = NoamOpt(args.out_dim, 2, 4000, optimizer)
+    optimizer = NoamOpt(args.out_dim, args.lr_factor, args.lr_step, optimizer)
 
     """
     # Initialize Data Logger
@@ -583,83 +575,81 @@ def experiment(dataloader, args):
     args.elapsed = te-ts
     logger.info('Training Completed')
 
-    return args
 
 
+if __name__ == '__main__':
+    seed = 123
+    np.random.seed(seed)
+    torch.manual_seed(seed)
 
-seed = 123
-np.random.seed(seed)
-torch.manual_seed(seed)
-args = parser.parse_args("")
+    parser = argparse.ArgumentParser(description='Add logP, TPSA, MR, PBF value on .smi files')
+    #===== Model Definition =====#
+    parser.add_argument("-v", "--vocab_size", type=int, default=41)
+    parser.add_argument("-i", "--in_dim", type=int, default=59)
+    parser.add_argument("-o", "--out_dim", type=int, default=256)
+    parser.add_argument("-m", "--molvec_dim", type=int, default=512)
 
-##### SIZE #####
-args.vocab_size = 41
-args.in_dim = 59
-args.out_dim = 256
-args.molvec_dim = 512
+    parser.add_argument("-n", "--n_layer", type=int, default=6)
+    parser.add_argument("-k", "--n_attn_heads", type=int, default=8)
+    parser.add_argument("-c", "--sc_type", type=str, default='sc')
 
-##### MODEL #####
-args.num_layers = 6
-args.use_attn = True
-args.n_attn_heads = 8
-args.use_bn = True
-args.sc_type = 'sc'
-args.emb_train = True
-args.train_logp = True
-args.train_mr = True
-args.train_tpsa = True
+    parser.add_argument("-a", "--use_attn", type=bool, default=True)
+    parser.add_argument("-b", "--use_bn", type=bool, default=True)
+    parser.add_argument("-e", "--emb_train", type=bool, default=True)
+    parser.add_argument("-dp", "--dp_rate", type=float, default=0.1)
 
-##### HYPERPARAMETERS #####
-args.optim = 'ADAM'
-args.lr = 0.001
-args.l2_coef = 0.001
-args.dp_rate = 0.1
+    #===== Optimizer =====#
+    parser.add_argument("-u", "--optim", type=str, default='ADAM')
+    parser.add_argument("-lf", "--lr_factor", type=float, default=2.0)
+    parser.add_argument("-ls", "--lr_step", type=int, default=4000)
 
-##### EXP #####
-args.epoch = 100
-args.batch_size = 512
-args.test_batch_size = 512
-args.save_every = 100
-args.validate_every = 100
-args.log_every = 20
+    #===== Training =====#
+    parser.add_argument("-p", "--train_logp", type=bool, default=True)
+    parser.add_argument("-r", "--train_mr", type=bool, default=True)
+    parser.add_argument("-t", "--train_tpsa", type=bool, default=True)
 
-##### DEVICE #####
-args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    parser.add_argument("-ep", "--epoch", type=int, default=100)
+    parser.add_argument("-bs", "--batch_size", type=int, default=512)
+    parser.add_argument("-tbs", "--test_batch_size", type=int, default=512)
 
-##### LOGGING #####
-args.log_path = 'runs'
-args.model_name = 'exp_test3'
-args.model_explain = make_model_comment(args)
-train_writer = SummaryWriter(join(args.log_path, args.model_name+'_train'))
-val_writer = SummaryWriter(join(args.log_path, args.model_name+'_val'))
-train_writer.add_text(tag='model', text_string='{}:{}'.format(args.model_name, args.model_explain), global_step= 0)
-logger = get_logger(join(args.log_path, args.model_name+'_train'))
+    #===== Logging =====#
+    parser.add_argument("-li", "--log_every", type=int, default=10) #Test: 10  #Default 40*10
+    parser.add_argument("-vi", "--validate_every", type=int, default=50) #Test:50 #Default 40*50
+    parser.add_argument("-si", "--save_every", type=int, default=50) #Test:50 #Default 40*100
 
-##### RESUME TRAINING #####
-args.ck_filename = None #'model_ck_000_000000200.tar'
+    parser.add_argument("-mn", "--model_name", type=str, required=True)
+    parser.add_argument("--log_path", type=str, default='runs')
+    parser.add_argument("--ck_filename", type=str, default=None) #'model_ck_000_000000200.tar'
+    parser.add_argument("--dataset_path", type=str, default='./dataset/data_s')
 
+    args = parser.parse_args()
 
+    #===== Experiment Setup =====#
+    args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    args.model_explain = make_model_comment(args)
+    train_writer = SummaryWriter(join(args.log_path, args.model_name+'_train'))
+    val_writer = SummaryWriter(join(args.log_path, args.model_name+'_val'))
+    train_writer.add_text(tag='model', text_string='{}:{}'.format(args.model_name, args.model_explain), global_step=0)
+    logger = get_logger(join(args.log_path, args.model_name+'_train'))
 
-train_dataset_path = './dataset/processed_zinc_smiles/data_xs/train'
-val_dataset_path = './dataset/processed_zinc_smiles/data_xs/val'
+    #===== Loading Dataset =====#
+    train_dataset_path = args.dataset_path + '/train'
+    val_dataset_path = args.dataset_path + '/val'
+    list_trains = get_dir_files(train_dataset_path)
+    list_vals = get_dir_files(val_dataset_path)
 
-list_trains = get_dir_files(train_dataset_path)
-list_vals = get_dir_files(val_dataset_path)
+    train_dataloader = zincDataLoader(join(train_dataset_path, list_trains[0]),
+                                      batch_size=args.batch_size,
+                                      drop_last=False,
+                                      shuffle_batch=True,
+                                      num_workers=8)
 
-train_dataloader = zincDataLoader(join(train_dataset_path, list_trains[0]),
-                                  batch_size=args.batch_size,
-                                  drop_last=False,
-                                  shuffle_batch=True,
-                                  num_workers=8)
+    val_dataloader = zincDataLoader(join(val_dataset_path, list_vals[0]),
+                                      batch_size=args.test_batch_size,
+                                      drop_last=False,
+                                      shuffle_batch=False,
+                                      num_workers=8)
 
-val_dataloader = zincDataLoader(join(val_dataset_path, list_vals[0]),
-                                  batch_size=args.test_batch_size,
-                                  drop_last=False,
-                                  shuffle_batch=False,
-                                  num_workers=8)
-
-dataloader = {'train': train_dataloader, 'val': val_dataloader}             
-
-
-result = experiment(dataloader, args)
+    dataloader = {'train': train_dataloader, 'val': val_dataloader}
+    result = experiment(dataloader, args)
 

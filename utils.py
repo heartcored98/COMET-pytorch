@@ -5,20 +5,12 @@ from os.path import isfile, join
 import logging
 import torch
 
-def make_model_comment(args, prior_keyword=('num_layers', 'out_dim',
-                                            'molvec_dim', 'sc_type',
-                                            'use_attn', 'n_attn_heads',
-                                            'use_bn', 'emb_train',
-                                            'train_logp', 'train_mr',
-                                            'train_tpsa', 'optim',
-                                            'lr', 'l2_coef',
-                                            'dp_rate', 'batch_size',
-                                            'train_logp', 'train_mr', 'train_tpsa')):
+def make_model_comment(args):
     model_name = datetime.datetime.now().strftime('%y-%m-%d_%H:%M:%S') + "_"
     dict_args = vars(args)
     if 'bar' in dict_args:
         del dict_args['bar']
-    for keyword in prior_keyword:
+    for keyword, value in dict_args.items():
         value = str(dict_args[keyword])
         if value.isdigit():
             try:
@@ -57,7 +49,8 @@ def save_checkpoint(epoch, cnt_iter, models, optimizer, args):
     checkpoint = {
         'epoch': epoch,
         'cnt_iter': cnt_iter,
-        'optimizer': optimizer.state_dict()
+        'optimizer': optimizer.state_dict(),
+        'args': args
     }
     for model_name, model in models.items():
         checkpoint.update({model_name: model.state_dict()})
