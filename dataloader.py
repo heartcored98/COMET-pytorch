@@ -1,34 +1,25 @@
 
 # coding: utf-8
 
-# In[4]:
-
-
-# In[9]:
-
 
 import os
 from os.path import isfile, join
+
+
 import random
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.sampler import Sampler, SequentialSampler
 from torch._six import int_classes as _int_classes
-
 from rdkit import Chem
 from scipy.linalg import fractional_matrix_power
-
-
 import numpy as np
 import pandas as pd
-
 
 
 def get_dir_files(dir_path):
     list_file = [f for f in os.listdir(dir_path) if isfile(join(dir_path, f))]
     return list_file
-
-
 
 
 def atom_feature(atom):
@@ -42,50 +33,18 @@ def atom_feature(atom):
                     one_of_k_encoding_unk(atom.GetImplicitValence(), [0, 1, 2, 3, 4, 5]) +
                     [atom.GetIsAromatic()])    # (40, 6, 5, 6, 1)
 
+
 def one_of_k_encoding_unk(x, allowable_set):
     """Maps inputs not in the allowable set to the last element."""
     if x not in allowable_set:
         x = allowable_set[-1]
     return list(map(lambda s: x == s, allowable_set))
 
+
 def char_to_ix(x, allowable_set):
     if x not in allowable_set:
         return [0] # Unknown Atom Token
     return [allowable_set.index(x)+1]
-
-
-# In[11]:
-
-
-class zincDataset(Dataset):
-    def __init__(self, data_path, skip_header=True):
-        self.data = pd.read_csv(data_path)
-        self.data = self.data.sort_values(by=['length'])
-        self.data = self.data.reset_index()
-        
-    def __len__(self):
-        return len(self.data)
-    
-    def __getitem__(self, index):
-        row = self.data.loc[index, :]
-        smile = row.smile
-        try:
-            mol = Chem.MolFromSmiles(smile)
-            adj = Chem.rdmolops.GetAdjacencyMatrix(mol)
-            list_feature = list()
-            for atom in mol.GetAtoms():
-                list_feature.append(atom_feature(atom))
-
-            return row.length, np.array(list_feature), adj, row.logP, row.mr, row.tpsa
-        except:
-            print(row)
-            return 5
-        
-    def get_sizes(self):
-        return self.data['length']
-
-
-# In[12]:
 
 
 def random_onehot(size):
@@ -94,12 +53,14 @@ def random_onehot(size):
     temp[np.random.randint(0, size)] = 1
     return temp 
 
+
 def normalize_adj(mx):
     """ Symmetry Normalization """
     rowsum = np.diag(np.array(mx.sum(1)))
     r_inv = fractional_matrix_power(rowsum, -0.5)
     r_inv[np.isinf(r_inv)] = 0.
     return r_inv.dot(mx).dot(r_inv)
+
 
 def masking_feature(feature, num_masking):
     """ Given feature, select 'num_masking' node feature and perturbate them.
@@ -178,9 +139,6 @@ def postprocess_batch(mini_batch):
     return batch_feature, batch_adj, batch_property, batch_ground, batch_masking
 
 
-# In[13]:
-
-
 class BatchSampler(Sampler):
 
     def __init__(self, sampler, batch_size, drop_last=False, shuffle_batch=False):
@@ -220,7 +178,39 @@ class BatchSampler(Sampler):
             return (len(self.sampler) + self.batch_size - 1) // self.batch_size
 
 
+class zincDataset(Dataset):
+    def __init__(self, data_path, skip_header=True):
+        self.data = pd.read_csv(data_path)
+        self.data = self.data.sort_values(by=['length'])
+        self.data = self.data.reset_index()
+        self.data['mr'] = np.log10(self.data['mr'] + 1)
+        self.data['tpsa'] = np.log10(self.data['tpsa'] + 1)
+        
+    def __len__(self):
+        return len(self.data)
+    
+    def __getitem__(self, index):
+        row = self.data.loc[index, :]
+        smile = row.smile
 
+        mol = Chem.MolFromSmiles(smile)
+        adj = Chem.rdmolops.GetAdjacencyMatrix(mol)
+        list_feature = list()
+        for atom in mol.GetAtoms():
+            list_feature.append(atom_feature(atom))
 
+        return row.length, np.array(list_feature), adj, row.logP, row.mr, row.tpsa
+        
+    def get_sizes(self):
+        return self.data['length']
 
-
+    
+class zincDataLoader(DataLoader):
+    def __init__(self, data_path, batch_size, drop_last, shuffle_batch, num_workers):
+        train_dataset = zincDataset(data_path=data_path)
+        sampler = SequentialSampler(train_dataset)
+        SortedBatchSampler = BatchSampler(sampler=sampler, batch_size=batch_size, drop_last=drop_last, shuffle_batch=shuffle_batch)
+        DataLoader.__init__(self, train_dataset,
+                            collate_fn=postprocess_batch, 
+                            num_workers=num_workers, 
+                            batch_sampler=SortedBatchSampler)
