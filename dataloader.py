@@ -1,12 +1,5 @@
 
-# coding: utf-8
 
-
-import os
-from os.path import isfile, join
-
-
-import random
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.sampler import Sampler, SequentialSampler
@@ -17,9 +10,7 @@ import numpy as np
 import pandas as pd
 
 
-def get_dir_files(dir_path):
-    list_file = [f for f in os.listdir(dir_path) if isfile(join(dir_path, f))]
-    return list_file
+
 
 
 def atom_feature(atom):
