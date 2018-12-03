@@ -9,3 +9,10 @@ Handling Large Dataset : https://machinelearningmastery.com/large-data-files-mac
 Neat Tutorial to use HDF5 with python : https://www.pythonforthelab.com/blog/how-to-use-hdf5-files-in-python/  
 Convert String into HDF5 encoding : https://stackoverflow.com/questions/23220513/storing-a-list-of-strings-to-a-hdf5-dataset-from-python  
 Loading List of HDF5 files with pytorch Dataset : https://discuss.pytorch.org/t/loading-huge-data-functionality/346/9   
+
+Installing TensorboardX : https://github.com/lanpa/tensorboardX  
+```
+git clone https://github.com/lanpa/tensorboardX && cd tensorboardX && python setup.py install
+```  
+
+
