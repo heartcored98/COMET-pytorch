@@ -2,6 +2,7 @@ from decimal import Decimal
 import datetime
 import os
 from os.path import isfile, join
+import logging
 
 def make_model_comment(args, prior_keyword=('num_layers', 'out_dim',
                                             'molvec_dim', 'sc_type',
@@ -32,3 +33,20 @@ def make_model_comment(args, prior_keyword=('num_layers', 'out_dim',
 def get_dir_files(dir_path):
     list_file = [f for f in os.listdir(dir_path) if isfile(join(dir_path, f))]
     return list_file
+
+
+def get_logger(log_path, filename='train.log', logger_name=None):
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+    fh = logging.FileHandler(join(log_path, 'train.log'))
+    fh.setLevel(logging.DEBUG)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+    fh.setFormatter(formatter)
+    ch.setFormatter(formatter)
+
+    # add the handlers to the logger
+    logger.addHandler(fh)
+    logger.addHandler(ch)
+    return logger
