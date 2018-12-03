@@ -3,6 +3,7 @@ import datetime
 import os
 from os.path import isfile, join
 import logging
+import torch
 
 def make_model_comment(args, prior_keyword=('num_layers', 'out_dim',
                                             'molvec_dim', 'sc_type',
@@ -50,3 +51,31 @@ def get_logger(log_path, filename='train.log', logger_name=None):
     logger.addHandler(fh)
     logger.addHandler(ch)
     return logger
+
+
+def save_checkpoint(epoch, cnt_iter, models, optimizer, args):
+    checkpoint = {
+        'epoch': epoch,
+        'cnt_iter': cnt_iter,
+        'optimizer': optimizer.state_dict()
+    }
+    for model_name, model in models.items():
+        checkpoint.update({model_name: model.state_dict()})
+
+    log_path = join(args.log_path, args.model_name + '_train')
+    filename = 'model_ck_{:03}_{:09}.tar'.format(epoch, cnt_iter)
+    path = join(log_path, filename)
+    torch.save(checkpoint, path)
+    return filename
+
+
+def load_checkpoint(models, optimizer, filename, args):
+    log_path = join(args.log_path, args.model_name + '_train')
+    checkpoint = torch.load(join(log_path, filename))
+
+    for model_name, model in models.items():
+        model.load_state_dict(checkpoint[model_name])
+    optimizer.load_state_dict(checkpoint['optimizer'])
+
+    return checkpoint['epoch'], checkpoint['cnt_iter'], models, optimizer
+
