@@ -68,11 +68,10 @@ class Readout(nn.Module):
         super(Readout, self).__init__()
         self.readout_fc = nn.Linear(out_dim, molvec_dim)
         nn.init.xavier_normal_(self.readout_fc.weight.data)
-        self.relu = nn.ReLU()
 
     def forward(self, output_H):
         molvec = self.readout_fc(output_H)
-        molvec = self.relu(torch.mean(molvec, dim=1))
+        molvec = torch.mean(molvec, dim=1)
         return molvec
 
 
