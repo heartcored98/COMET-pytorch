@@ -72,7 +72,7 @@ class Readout(nn.Module):
 
     def forward(self, output_H):
         molvec = self.readout_fc(output_H)
-        molvec = self.relu(torch.sum(molvec, dim=1))
+        molvec = self.relu(torch.mean(molvec, dim=1))
         return molvec
 
 

@@ -119,16 +119,7 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
             optimizer.step(cnt_iter)
             cnt_iter += 1   
 
-            # Save Model 
-            if cnt_iter % args.save_every == 0:
-                filename = save_checkpoint(epoch, cnt_iter, models, optimizer, args)
-                logger.info('Saved Model as {}'.format(filename))
 
-            # Validate Model
-            if cnt_iter % args.validate_every == 0:
-                optimizer.zero_grad()
-                validate(models, dataloader['val'], args, cnt_iter=cnt_iter, epoch=epoch)
-                t = time.time()
 
             # Prompting Status
             if cnt_iter % args.log_every == 0:
@@ -138,6 +129,17 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
                 output = output.format(epoch, batch_idx / len(dataloader['train']) * 100.0, loss, mask_loss, process_speed, cnt_iter, elapsed,)
                 t = time.time()
                 logger.info(output)
+
+            # Validate Model
+            if cnt_iter % args.validate_every == 0:
+                optimizer.zero_grad()
+                validate(models, dataloader['val'], args, cnt_iter=cnt_iter, epoch=epoch)
+                t = time.time()
+
+            # Save Model
+            if cnt_iter % args.save_every == 0:
+                filename = save_checkpoint(epoch, cnt_iter, models, optimizer, args)
+                logger.info('Saved Model as {}'.format(filename))
 
             del batch
                 
