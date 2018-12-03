@@ -1,42 +1,44 @@
 
 
 
-import os
-import numpy as np
-import tensorflow as tf
 import deepchem as dc
 from deepchem.feat import Featurizer
 
-from COMET import encoder
-import benchmark_util
-
+from dataloader import *
+import model
 
 # * Source code for fc models (tf for classification, tf_regression for regression)
 # https://github.com/deepchem/deepchem/blob/master/deepchem/models/tensorgraph/fcnet.py
 
-
-
 def benchmark(ckpt_file):
-    
     # load checkpoint file 
     checkpoint = torch.load(ckpt_file)    
     args = checkpoint['args']
     args.batch_size = 1
     args.test_batch_size = 1
-    model = encoder(args)
-    model.load_state_dict(checkpoint['encoder'])
+    comet = model.Encoder(args)
+    comet.load_state_dict(checkpoint['encoder'])
 
-    class Encoder(Featurizer):
+    class MyEncoder(Featurizer):
         name = ['comet_encoder']
         def __init__(self, model):
             self.model = model
             
         def _featurize(self, mol):
-            X, A = benchmark_util.mol_to_graph(mol)
+            X, A = mol_to_graph(mol)
             molvec = self.model(X, A)
             return torch.squeeze(molvec)
+
+        def mol_to_graph(mol):
+            mol = Chem.MolFromSmiles(mol)
+            adj = Chem.rdmolops.GetAdjacencyMatrix(mol)
+            list_feature = list()
+            for atom in mol.GetAtoms():
+                list_feature.append(atom_feature(atom))
+
+            return np.array(list_feature), adj
     
-    filename = args.expname
+    filename = args.model_name
     reg_path = './benchmark/'+'reg_'+filename+'.csv'
     cls_path = './benchmark/'+'cls_'+filename+'.csv'
 
@@ -45,7 +47,7 @@ def benchmark(ckpt_file):
                                  model = 'tf', 
                                  split = None,
                                  metric = None,
-                                 featurizer = Encoder(model),
+                                 featurizer = MyEncoder(comet),
                                  out_path= reg_path,
                                  hyper_parameters = None,
                                  test = True,
@@ -58,7 +60,7 @@ def benchmark(ckpt_file):
                                  model = 'tf_regression', 
                                  split = None,
                                  metric = None,
-                                 featurizer = Encoder(model),
+                                 featurizer = MyEncoder(comet),
                                  out_path= cls_path,
                                  hyper_parameters = None,
                                  test = True,
