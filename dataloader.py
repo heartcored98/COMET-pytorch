@@ -168,7 +168,7 @@ class BatchSampler(Sampler):
         else:
             return (len(self.sampler) + self.batch_size - 1) // self.batch_size
 
-
+"""
 class zincDataset(Dataset):
     def __init__(self, data_path, skip_header=True):
         self.data = pd.read_csv(data_path)
@@ -176,7 +176,9 @@ class zincDataset(Dataset):
         self.data = self.data.reset_index()
         self.data['mr'] = np.log10(self.data['mr'] + 1)
         self.data['tpsa'] = np.log10(self.data['tpsa'] + 1)
-        
+
+        self.data = self.data.to_dict('index')
+
     def __len__(self):
         return len(self.data)
     
@@ -194,7 +196,33 @@ class zincDataset(Dataset):
         
     def get_sizes(self):
         return self.data['length']
+"""
+class zincDataset(Dataset):
+    def __init__(self, data_path, skip_header=True):
+        self.data = pd.read_csv(data_path)
+        self.data = self.data.sort_values(by=['length'])
+        self.data = self.data.reset_index()
+        self.data['mr'] = np.log10(self.data['mr'] + 1)
+        self.data['tpsa'] = np.log10(self.data['tpsa'] + 1)
+        self.data = self.data.to_dict('index')
 
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, index):
+        row = self.data[index]
+        smile = row['smile']
+
+        mol = Chem.MolFromSmiles(smile)
+        adj = Chem.rdmolops.GetAdjacencyMatrix(mol)
+        list_feature = list()
+        for atom in mol.GetAtoms():
+            list_feature.append(atom_feature(atom))
+
+        return row['length'], np.array(list_feature), adj, row['logP'], row['mr'], row['tpsa']
+
+    def get_sizes(self):
+        return self.data['length']
     
 class zincDataLoader(DataLoader):
     def __init__(self, data_path, batch_size, drop_last, shuffle_batch, num_workers):
@@ -204,4 +232,9 @@ class zincDataLoader(DataLoader):
         DataLoader.__init__(self, train_dataset,
                             collate_fn=postprocess_batch, 
                             num_workers=num_workers, 
-                            batch_sampler=SortedBatchSampler)
+                            batch_sampler=SortedBatchSampler,
+                            pin_memory=True)
+
+if __name__ == '__main__':
+    a = './dataset/data_xs/train/train000000.csv'
+    dataset = zincDataset(a)

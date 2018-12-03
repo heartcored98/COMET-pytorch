@@ -69,7 +69,6 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
     reg_loss = nn.MSELoss()
 
     for epoch in range(epoch, args.epoch+1):
-        epoch_train_loss = 0
         for batch_idx, batch in enumerate(dataloader['train']):
             
             # Setting Train Mode
@@ -115,9 +114,6 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
             train_writer.add_scalar('loss/mask', mask_loss, cnt_iter)
 
 
-            epoch_train_loss += loss / len(batch)
-            list_train_loss.append({'epoch':batch_idx/len(dataloader['train'])+epoch, 'train_loss':loss})
-            
             # Backprogating and Updating Parameter
             loss.backward()
             optimizer.step(cnt_iter)
@@ -142,6 +138,8 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
                 output = output.format(epoch, batch_idx / len(dataloader['train']) * 100.0, loss, mask_loss, process_speed, cnt_iter, elapsed,)
                 t = time.time()
                 logger.info(output)
+
+            del batch
                 
     logger.info('Training Completed')
 
@@ -154,16 +152,11 @@ def validate(models, data_loader, args, **kwargs):
     epoch = kwargs['epoch']
     temp_iter = 0
     reg_loss = nn.MSELoss()
-    
+
     mask_loss = []
     logP_loss = []
     mr_loss = []
     tpsa_loss = []
-    
-    list_logp, list_pred_logp = [], []
-    list_mr, list_pred_mr = [], []
-    list_tpsa, list_pred_tpsa = [], []
-    logp_mae, logp_std, mr_mae, mr_std, tpsa_mae, tpsa_std = 0, 0, 0, 0, 0, 0
 
     # Initialization Model with Evaluation Mode
     for _, model in models.items():
@@ -206,6 +199,8 @@ def validate(models, data_loader, args, **kwargs):
                 output = output.format(epoch, batch_idx / len(data_loader) * 100.0, process_speed, temp_iter, elapsed,)
                 t = time.time()
                 logger.info(output)
+
+            del batch
                 
     mask_loss = np.mean(np.array(mask_loss))
     loss = mask_loss
