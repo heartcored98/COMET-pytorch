@@ -8,3 +8,6 @@ def extract_num(st):
     return result
 
 print(extract_num('train 00001 .csv'))
+
+a = 5
+b = 4
