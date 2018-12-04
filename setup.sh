@@ -8,7 +8,7 @@ mkdir dataset
 cd dataset
 
 echo Downloading Dataset from S3 Bucket...
-wget -N https://s3.amazonaws.com/comet-dataset/data_xs.tar.gz -O data_xs.tar.g
+wget -N https://s3.amazonaws.com/comet-dataset/data_xs.tar.gz -O data_xs.tar.gz
 wget -N https://s3.amazonaws.com/comet-dataset/data_s.tar.gz -O data_s.tar.gz
 wget -N https://s3.amazonaws.com/comet-dataset/data_ms.tar.gz -O data_ms.tar.gz
 wget -N https://s3.amazonaws.com/comet-dataset/data_m.tar.gz -O data_m.tar.gz
