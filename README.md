@@ -15,4 +15,7 @@ Installing TensorboardX : https://github.com/lanpa/tensorboardX
 git clone https://github.com/lanpa/tensorboardX && cd tensorboardX && python setup.py install
 ```  
 
+Compress and Extract datasetfile : https://www.cyberciti.biz/faq/how-do-i-compress-a-whole-linux-or-unix-directory/  
+compress : ```tar -zcvf dataset.tar.gz dataset```  
+extrace : ```tar -zxvf dataset.tar.gz```  
 
