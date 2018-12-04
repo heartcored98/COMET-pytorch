@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+
+#echo Cloning from Remote Github Repository...
+#git clone https://github.com/heartcored98/COMET-pytorch comet
+
+# setup.sh should start at comet root directory
+mkdir dataset
+cd dataset
+
+echo Downloading Dataset from S3 Bucket...
+wget https://s3.amazonaws.com/comet-dataset/data_xs.tar.gz
+wget https://s3.amazonaws.com/comet-dataset/data_s.tar.gz
+wget https://s3.amazonaws.com/comet-dataset/data_ms.tar.gz
+wget https://s3.amazonaws.com/comet-dataset/data_m.tar.gz
+echo Downloading Complete!
+
+echo Extracting Dataset...
+tar -zxvf data_xs.tar.gz
+tar -zxvf data_s.tar.gz
+tar -zxvf data_ms.tar.gz
+tar -zxvf data_m.tar.gz
+echo Extracting Complete!
+
+# Install dependency Package
+cd ../
+pip install -r requirements.txt
