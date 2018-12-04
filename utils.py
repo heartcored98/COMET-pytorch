@@ -6,7 +6,7 @@ import logging
 import torch
 
 def make_model_comment(args):
-    model_name = datetime.datetime.now().strftime('%y-%m-%d_%H:%M:%S') + "_"
+    model_explain = "Time : {} \n".format(datetime.datetime.now().strftime('%y-%m-%d_%H:%M:%S'))
     dict_args = vars(args)
     if 'bar' in dict_args:
         del dict_args['bar']
@@ -15,12 +15,12 @@ def make_model_comment(args):
         if value.isdigit():
             try:
                 value = int(value)
-                model_name += keyword + ':{}_'.format(dict_args[keyword])
+                model_explain += keyword + ':{}_'.format(dict_args[keyword]) + '\n'
             except:
-                model_name += keyword + ':{:.2E}_'.format(Decimal(dict_args[keyword]))
+                model_explain += keyword + ':{:.2E}_'.format(Decimal(dict_args[keyword])) + '\n'
         else:
-            model_name += keyword + ':{}_'.format(value)
-    return model_name[:254]
+            model_explain += keyword + ':{}_'.format(value) + '\n'
+    return model_explain
 
 
 def get_dir_files(dir_path):
@@ -72,3 +72,41 @@ def load_checkpoint(models, optimizer, filename, args):
 
     return checkpoint['epoch'], checkpoint['cnt_iter'], models, optimizer
 
+
+def log_histogram(models, writer, cnt_iter):
+    encoder = models['encoder']
+    for name, param in encoder.named_parameters():
+        name = name.replace('.', '/')
+
+        idx1, idx2 = name.split('/')[-1], name.split('/')[-2]
+        if idx1.isdigit():
+            if int(idx1) > 0:
+                continue
+        if idx2.isdigit():
+            if int(idx2) > 0:
+                continue
+
+        idx = name.find('attn')
+        if idx > 0:
+            name = name[idx:]
+        writer.add_histogram(name, param.clone().cpu().data.numpy(), cnt_iter)
+
+    classifier = models['classifier']
+    for name, param in classifier.named_parameters():
+        name = 'classifier/' + name
+        writer.add_histogram(name, param.clone().cpu().data.numpy(), cnt_iter)
+
+    if 'logP' in models:
+        for name, param in models['logP'].named_parameters():
+            name = 'logP/' + name
+            writer.add_histogram(name, param.clone().cpu().data.numpy(), cnt_iter)
+
+    if 'mr' in models:
+        for name, param in models['mr'].named_parameters():
+            name = 'mr/' + name
+            writer.add_histogram(name, param.clone().cpu().data.numpy(), cnt_iter)
+
+    if 'tpsa' in models:
+        for name, param in models['tpsa'].named_parameters():
+            name = 'tpsa/' + name
+            writer.add_histogram(name, param.clone().cpu().data.numpy(), cnt_iter)

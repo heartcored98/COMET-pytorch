@@ -193,7 +193,7 @@ class Encoder(nn.Module):
 
 
 class Classifier(nn.Module):
-    def __init__(self, in_dim, out_dim, molvec_dim, vocab_size, dropout_rate=0):
+    def __init__(self, in_dim, out_dim, molvec_dim, vocab_size, dropout_rate=0.1):
         super(Classifier, self).__init__()
         self.in_dim = in_dim
         self.out_dim = out_dim
@@ -226,7 +226,7 @@ class Classifier(nn.Module):
         return pred_x
 
     def classify(self, concat_x):
-        x = self.relu(self.fc1(concat_x))
+        x = self.dropout(self.relu(self.fc1(concat_x)))
         x = self.fc2(x)
         return x
 
@@ -236,7 +236,7 @@ class Classifier(nn.Module):
 
 
 class Regressor(nn.Module):
-    def __init__(self, molvec_dim, dropout_rate):
+    def __init__(self, molvec_dim, dropout_rate=0.1):
         super(Regressor, self).__init__()
 
         self.molvec_dim = molvec_dim
@@ -244,9 +244,8 @@ class Regressor(nn.Module):
         self.reg_fc2 = nn.Linear(self.molvec_dim // 2, 1)
         self.dropout = nn.Dropout(p=dropout_rate)
         self.relu = nn.ReLU()
-        self.tanh = nn.Tanh()
 
     def forward(self, molvec):
-        x = self.relu(self.reg_fc1(molvec))
+        x = self.dropout(self.relu(self.reg_fc1(molvec)))
         x = self.reg_fc2(x)
         return torch.squeeze(x)

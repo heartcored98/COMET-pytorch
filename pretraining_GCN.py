@@ -41,13 +41,14 @@ class NoamOpt:
         
     def step(self, step):
         "Update parameters and rate"
-        rate = self.rate(step+1)
+        rate = self.rate(step)
         for p in self.optimizer.param_groups:
             p['lr'] = rate
         self._rate = rate
         self.optimizer.step()
 
     def rate(self, step = None):
+        step += 1
         return self.factor * (self.model_size ** (-0.5) * min(step ** (-0.5), step * self.warmup ** (-1.5)))
     
     def zero_grad(self):
@@ -154,7 +155,6 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
 def validate(models, data_loader, args, **kwargs):
 
     t = time.time()
-    epoch_val_loss = 0
     cnt_iter = kwargs['cnt_iter']
     epoch = kwargs['epoch']
     temp_iter = 0
@@ -250,6 +250,9 @@ def validate(models, data_loader, args, **kwargs):
 
     val_writer.add_scalar('1.status/total', loss, cnt_iter)
     val_writer.add_scalar('1.status/mask', mask_loss, cnt_iter)
+
+    # Log model weight historgram
+    log_histogram(models, val_writer, cnt_iter)
     
     """
     # Calculate overall MAE and STD value      
@@ -265,8 +268,6 @@ def validate(models, data_loader, args, **kwargs):
         tpsa_mae = mean_absolute_error(list_tpsa, list_pred_tpsa)
         tpsa_std = np.std(np.array(list_tpsa)-np.array(list_pred_tpsa))
     """
-        
-
 
     output = "[V] E:{:3}. P:{:>2.1f}%. Loss:{:>9.3}. Mask Loss:{:>9.3}. {:4.1f} mol/sec. Iter:{:6}.  Elapsed:{:6.1f} sec."
     elapsed = time.time() - t
@@ -276,7 +277,6 @@ def validate(models, data_loader, args, **kwargs):
     logger.info(output)
 
     torch.cuda.empty_cache()
-
 
 def experiment(dataloader, args):
     ts = time.time()
@@ -318,18 +318,7 @@ def experiment(dataloader, args):
         logger.info('Loaded Model from {}'.format(args.ck_filename))
     
     optimizer = NoamOpt(args.out_dim, args.lr_factor, args.lr_step, optimizer)
-
-    """
-    # Initialize Data Logger
-    list_train_loss = list()
-    list_val_loss = list()
-    list_logp_mae = list()
-    list_logp_std = list()
-    list_mr_mae = list()
-    list_mr_std = list()
-    list_tpsa_mae = list()
-    list_tpsa_std = list()
-    """
+    log_histogram(models, val_writer, cnt_iter)
 
     # Train Model
     train(models, optimizer, dataloader, epoch, cnt_iter, args)
@@ -373,8 +362,8 @@ if __name__ == '__main__':
     parser.add_argument("-t", "--train_tpsa", type=bool, default=True)
 
     parser.add_argument("-ep", "--epoch", type=int, default=100)
-    parser.add_argument("-bs", "--batch_size", type=int, default=1024)
-    parser.add_argument("-tbs", "--test_batch_size", type=int, default=1024)
+    parser.add_argument("-bs", "--batch_size", type=int, default=512)
+    parser.add_argument("-tbs", "--test_batch_size", type=int, default=512)
 
     #===== Logging =====#
     parser.add_argument("-li", "--log_every", type=int, default=10*40) #Test: 10  #Default 40*10
