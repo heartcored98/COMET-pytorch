@@ -22,8 +22,9 @@ tar -zxvf data_m.tar.gz
 echo Extracting Complete!
 
 # Install dependency Package
-cd ../
+cd ../../
 pip install --upgrade pip
 pip install -r requirements.txt
 conda install pytorch-nightly -c pytorch
 pip install tensorflow
+git clone https://github.com/lanpa/tensorboardX && cd tensorboardX && python setup.py install
