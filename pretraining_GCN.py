@@ -353,7 +353,7 @@ if __name__ == '__main__':
 
     #===== Optimizer =====#
     parser.add_argument("-u", "--optim", type=str, default='ADAM')
-    parser.add_argument("-lf", "--lr_factor", type=float, default=20.0)
+    parser.add_argument("-lf", "--lr_factor", type=float, default=2.0)
     parser.add_argument("-ls", "--lr_step", type=int, default=4000)
 
     #===== Training =====#
