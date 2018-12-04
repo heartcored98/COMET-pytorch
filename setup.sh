@@ -26,6 +26,7 @@ cd ../
 pip install --upgrade pip
 pip install -r requirements.txt
 conda install pytorch-nightly -c pytorch
+conda install -c rdkit rdkit
 pip install tensorflow-gpu
 cd ../
 git clone https://github.com/lanpa/tensorboardX && cd tensorboardX && python setup.py install
