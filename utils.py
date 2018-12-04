@@ -56,7 +56,7 @@ def save_checkpoint(epoch, cnt_iter, models, optimizer, args):
         checkpoint.update({model_name: model.state_dict()})
 
     log_path = join(args.log_path, args.model_name + '_train')
-    filename = 'model_ck_{:03}_{:09}.tar'.format(epoch, cnt_iter)
+    filename = '{}_{:03}_{:09}.tar'.format(args.model_name, epoch, cnt_iter)
     path = join(log_path, filename)
     torch.save(checkpoint, path)
     return filename

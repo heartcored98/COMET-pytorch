@@ -366,7 +366,7 @@ if __name__ == '__main__':
     parser.add_argument("-tbs", "--test_batch_size", type=int, default=512)
 
     #===== Logging =====#
-    parser.add_argument("-li", "--log_every", type=int, default=10*40) #Test: 10  #Default 40*10
+    parser.add_argument("-li", "--log_every", type=int, default=10*10) #Test: 10  #Default 40*10
     parser.add_argument("-vi", "--validate_every", type=int, default=50*40) #Test:50 #Default 40*50
     parser.add_argument("-si", "--save_every", type=int, default=40*100) #Test:50 #Default 40*100
 
