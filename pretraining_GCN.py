@@ -22,8 +22,8 @@ def compute_loss(pred_x, ground_x, vocab_size):
     numH_loss = F.cross_entropy(pred_x[:,vocab_size+6:vocab_size+11], ground_x[:, 7:12].detach().max(dim=1)[1])
     valence_loss = F.cross_entropy(pred_x[:,vocab_size+11:vocab_size+17], ground_x[:,12:18].detach().max(dim=1)[1])
     isarom_loss = F.binary_cross_entropy(torch.sigmoid(pred_x[:,-1]), ground_x[:,-1].detach().float())
-    total_loss = symbol_loss + degree_loss + numH_loss + valence_loss + isarom_loss
-    return total_loss
+    # total_loss = symbol_loss + degree_loss + numH_loss + valence_loss + isarom_loss
+    return symbol_loss, degree_loss, numH_loss, valence_loss, isarom_loss #total_loss
 
 
 #######################
@@ -90,36 +90,41 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
             pred_mask = models['classifier'](X, molvec, idx_M)
 
             # Compute Mask Task Loss & Property Regression Loss
-            mask_loss = compute_loss(pred_mask, ground_X, args.vocab_size)
+            symbol_loss, degree_loss, numH_loss, valence_loss, isarom_loss = compute_loss(pred_mask, ground_X, args.vocab_size)
+            mask_loss = symbol_loss + degree_loss + numH_loss + valence_loss + isarom_loss
             loss = mask_loss
 
             if args.train_logp:
                 pred_logp = models['logP'](molvec)
                 logP_loss = reg_loss(pred_logp, logp)
                 loss += logP_loss
-                train_writer.add_scalar('auxilary/logP', logP_loss, cnt_iter)
+                train_writer.add_scalar('3.auxilary/logP', logP_loss, cnt_iter)
             if args.train_mr:
                 pred_mr = models['mr'](molvec)
                 mr_loss = reg_loss(pred_mr, mr)
                 loss += mr_loss
-                train_writer.add_scalar('auxilary/mr', mr_loss, cnt_iter)
+                train_writer.add_scalar('3.auxilary/mr', mr_loss, cnt_iter)
 
             if args.train_tpsa:
                 pred_tpsa = models['tpsa'](molvec)
                 tpsa_loss = reg_loss(pred_tpsa, tpsa)
                 loss += tpsa_loss
-                train_writer.add_scalar('auxilary/tpsa', tpsa_loss, cnt_iter)
+                train_writer.add_scalar('3.auxilary/tpsa', tpsa_loss, cnt_iter)
 
-            train_writer.add_scalar('loss/total', loss, cnt_iter)
-            train_writer.add_scalar('loss/mask', mask_loss, cnt_iter)
+            train_writer.add_scalar('2.mask/symbol', symbol_loss, cnt_iter)
+            train_writer.add_scalar('2.mask/degree', degree_loss, cnt_iter)
+            train_writer.add_scalar('2.mask/numH', numH_loss, cnt_iter)
+            train_writer.add_scalar('2.mask/valence', valence_loss, cnt_iter)
+            train_writer.add_scalar('2.mask/isarom', isarom_loss, cnt_iter)
 
+            train_writer.add_scalar('1.status/total', loss, cnt_iter)
+            train_writer.add_scalar('1.status/mask', mask_loss, cnt_iter)
 
             # Backprogating and Updating Parameter
             loss.backward()
             optimizer.step(cnt_iter)
+            train_writer.add_scalar('1.status/lr', optimizer.rate(cnt_iter), cnt_iter)
             cnt_iter += 1   
-
-
 
             # Prompting Status
             if cnt_iter % args.log_every == 0:
@@ -155,10 +160,15 @@ def validate(models, data_loader, args, **kwargs):
     temp_iter = 0
     reg_loss = nn.MSELoss()
 
-    mask_loss = []
-    logP_loss = []
-    mr_loss = []
-    tpsa_loss = []
+    list_mask_loss = []
+    list_symbol_loss = []
+    list_degree_loss = []
+    list_numH_loss = []
+    list_valence_loss = []
+    list_isarom_loss = []
+    list_logP_loss = []
+    list_mr_loss = []
+    list_tpsa_loss = []
 
     # Initialization Model with Evaluation Mode
     for _, model in models.items():
@@ -179,17 +189,23 @@ def validate(models, data_loader, args, **kwargs):
             pred_mask = models['classifier'](X, molvec, idx_M)
             
             # Compute Mask Task Loss & Property Regression Loss
-            mask_loss.append(compute_loss(pred_mask, ground_X, args.vocab_size).item())
+            symbol_loss, degree_loss, numH_loss, valence_loss, isarom_loss = compute_loss(pred_mask, ground_X, args.vocab_size)
+            list_symbol_loss.append(symbol_loss.item())
+            list_degree_loss.append(degree_loss.item())
+            list_numH_loss.append(numH_loss.item())
+            list_valence_loss.append(valence_loss.item())
+            list_isarom_loss.append(isarom_loss.item())
+            list_mask_loss.append((symbol_loss + degree_loss + numH_loss + valence_loss + isarom_loss).item())
 
             if args.train_logp:
                 pred_logp = models['logP'](molvec)
-                logP_loss.append(reg_loss(pred_logp, logp).item())
+                list_logP_loss.append(reg_loss(pred_logp, logp).item())
             if args.train_mr:
                 pred_mr = models['mr'](molvec)
-                mr_loss.append(reg_loss(pred_mr, mr).item())
+                list_mr_loss.append(reg_loss(pred_mr, mr).item())
             if args.train_tpsa:
                 pred_tpsa = models['tpsa'](molvec)
-                tpsa_loss.append(reg_loss(pred_tpsa, tpsa).item())
+                list_tpsa_loss.append(reg_loss(pred_tpsa, tpsa).item())
 
             temp_iter += 1   
 
@@ -204,22 +220,36 @@ def validate(models, data_loader, args, **kwargs):
 
             del batch
                 
-    mask_loss = np.mean(np.array(mask_loss))
+    mask_loss = np.mean(np.array(list_mask_loss))
+    symbol_loss = np.mean(np.array(list_symbol_loss))
+    degree_loss = np.mean(np.array(list_degree_loss))
+    numH_loss = np.mean(np.array(list_numH_loss))
+    valence_loss = np.mean(np.array(list_valence_loss))
+    isarom_loss = np.mean(np.array(list_isarom_loss))
+
     loss = mask_loss
     if args.train_logp:
-        logP_loss = np.mean(np.array(logP_loss))
+        logP_loss = np.mean(np.array(list_logP_loss))
         loss += logP_loss
-        val_writer.add_scalar('auxilary/logP', logP_loss, cnt_iter)
+        val_writer.add_scalar('3.auxilary/logP', logP_loss, cnt_iter)
     if args.train_mr:
-        mr_loss = np.mean(np.array(mr_loss))
+        mr_loss = np.mean(np.array(list_mr_loss))
         loss += mr_loss
-        val_writer.add_scalar('auxilary/mr', mr_loss, cnt_iter)
+        val_writer.add_scalar('3.auxilary/mr', mr_loss, cnt_iter)
 
     if args.train_tpsa:
-        tpsa_loss = np.mean(np.array(tpsa_loss))
+        tpsa_loss = np.mean(np.array(list_tpsa_loss))
         loss += tpsa_loss
-        val_writer.add_scalar('auxilary/tpsa', tpsa_loss, cnt_iter)
+        val_writer.add_scalar('3.auxilary/tpsa', tpsa_loss, cnt_iter)
 
+    val_writer.add_scalar('2.mask/symbol', symbol_loss, cnt_iter)
+    val_writer.add_scalar('2.mask/degree', degree_loss, cnt_iter)
+    val_writer.add_scalar('2.mask/numH', numH_loss, cnt_iter)
+    val_writer.add_scalar('2.mask/valence', valence_loss, cnt_iter)
+    val_writer.add_scalar('2.mask/isarom', isarom_loss, cnt_iter)
+
+    val_writer.add_scalar('1.status/total', loss, cnt_iter)
+    val_writer.add_scalar('1.status/mask', mask_loss, cnt_iter)
     
     """
     # Calculate overall MAE and STD value      
@@ -236,8 +266,7 @@ def validate(models, data_loader, args, **kwargs):
         tpsa_std = np.std(np.array(list_tpsa)-np.array(list_pred_tpsa))
     """
         
-    val_writer.add_scalar('loss/total', loss, cnt_iter)
-    val_writer.add_scalar('loss/mask', mask_loss, cnt_iter)
+
 
     output = "[V] E:{:3}. P:{:>2.1f}%. Loss:{:>9.3}. Mask Loss:{:>9.3}. {:4.1f} mol/sec. Iter:{:6}.  Elapsed:{:6.1f} sec."
     elapsed = time.time() - t
@@ -322,9 +351,9 @@ if __name__ == '__main__':
     parser.add_argument("-v", "--vocab_size", type=int, default=41)
     parser.add_argument("-i", "--in_dim", type=int, default=59)
     parser.add_argument("-o", "--out_dim", type=int, default=256)
-    parser.add_argument("-m", "--molvec_dim", type=int, default=512)
+    parser.add_argument("-m", "--molvec_dim", type=int, default=256)
 
-    parser.add_argument("-n", "--n_layer", type=int, default=6)
+    parser.add_argument("-n", "--n_layer", type=int, default=4)
     parser.add_argument("-k", "--n_attn_heads", type=int, default=8)
     parser.add_argument("-c", "--sc_type", type=str, default='sc')
 
@@ -344,8 +373,8 @@ if __name__ == '__main__':
     parser.add_argument("-t", "--train_tpsa", type=bool, default=True)
 
     parser.add_argument("-ep", "--epoch", type=int, default=100)
-    parser.add_argument("-bs", "--batch_size", type=int, default=512)
-    parser.add_argument("-tbs", "--test_batch_size", type=int, default=512)
+    parser.add_argument("-bs", "--batch_size", type=int, default=1024)
+    parser.add_argument("-tbs", "--test_batch_size", type=int, default=1024)
 
     #===== Logging =====#
     parser.add_argument("-li", "--log_every", type=int, default=10*40) #Test: 10  #Default 40*10
