@@ -395,12 +395,14 @@ if __name__ == '__main__':
     list_trains = get_dir_files(train_dataset_path)
     list_vals = get_dir_files(val_dataset_path)
 
+    logger.info("##### Loading Train Dataloader #####")
     train_dataloader = zincDataLoader(join(train_dataset_path, list_trains[0]),
                                       batch_size=args.batch_size,
                                       drop_last=False,
                                       shuffle_batch=True,
                                       num_workers=8)
 
+    logger.info("##### Loading Train Dataloader #####")
     val_dataloader = zincDataLoader(join(val_dataset_path, list_vals[0]),
                                       batch_size=args.test_batch_size,
                                       drop_last=False,
