@@ -125,7 +125,9 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
             loss.backward()
             optimizer.step(cnt_iter)
             train_writer.add_scalar('1.status/lr', optimizer.rate(cnt_iter), cnt_iter)
-            cnt_iter += 1   
+            cnt_iter += 1
+            setattr(args, 'epoch_now', epoch)
+            setattr(args, 'iter_now', cnt_iter)
 
             # Prompting Status
             if cnt_iter % args.log_every == 0:
@@ -298,7 +300,8 @@ def experiment(dataloader, args):
     for key, model in models.items():
         model.to(args.device)
         trainable_parameters += list(filter(lambda p: p.requires_grad, model.parameters()))
-        logger.info('{:10}: {:>10} parameters'.format(key, sum(p.numel() for p in model.parameters() if p.requires_grad)))
+        logger.info('{:10}: {:>10} parameters'.format(key, sum(p.numel() for p in model.parameters())))
+        setattr(args, '{}_param'.format(key), sum(p.numel() for p in model.parameters()))
     logger.info('#################################')
     
     if args.optim == 'ADAM':
