@@ -110,7 +110,7 @@ def postprocess_batch(mini_batch):
     """ Given mini-batch sample, adjacency matrix and node feature vectors were padded with zero. """
     max_length = int(max([row[0] for row in mini_batch]))
     min_length = int(min([row[0] for row in mini_batch]))
-    num_masking = int(max_length * MASKING_RATE)
+    num_masking = max(1, int(max_length * MASKING_RATE))
     batch_length = len(mini_batch)
     batch_feature = np.zeros((batch_length, max_length, mini_batch[0][1].shape[1]), dtype=int)
     batch_adj = np.zeros((batch_length, max_length, max_length))
