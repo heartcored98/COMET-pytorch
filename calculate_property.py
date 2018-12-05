@@ -119,15 +119,15 @@ def process_dataset(chunk_size,
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Add logP, TPSA, MR, PBF value on .smi files')
     parser.add_argument("-c", "--chunk_size", help="number of rows in one chunk ", type=int, default=25000000)
-    parser.add_argument("-n", "--num_worker", help="number of co-working process", type=int, default=16)
-    parser.add_argument("-q", "--sampling_rate", help="number of co-working process", type=float, default=0.0047049)
+    parser.add_argument("-n", "--num_worker", help="number of co-working process", type=int, default=14)
+    parser.add_argument("-q", "--sampling_rate", help="number of co-working process", type=float, default=0.00047049 * 0.5)
     parser.add_argument("-r", "--test_size", help="portion of validation_set", type=float, default=0.2)
     parser.add_argument("-t", "--flag_continue", help="whether continue writing file", type=bool, default=False)
 
     parser.add_argument("-s", "--start_offset", help="starting from i-th file in directory", type=int, default=0)
     parser.add_argument("-e", "--end_offset", help="end processing at i-th file in directory", type=int, default=-1)
-    parser.add_argument("-d", "--raw_dir_path", help="directory where dataset stored", type=str, default='./dataset/raw_zinc_smiles')
-    parser.add_argument("-o", "--output_dir_path", help="directory where processed data saved", type=str, default='./dataset/processed_zinc_smiles/data_xss')
+    parser.add_argument("-d", "--raw_dir_path", help="directory where dataset stored", type=str, default='./raw_zinc_smiles')
+    parser.add_argument("-o", "--output_dir_path", help="directory where processed data saved", type=str, default='./dataset/data_xxs')
 
     args = parser.parse_args()
 
