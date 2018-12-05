@@ -91,7 +91,7 @@ class Readout(nn.Module):
 
 
 class BN1d(nn.Module):
-    def __init__(self, out_dim, use_bn):
+    def __init__(self, out_dim, use_bn=True):
         super(BN1d, self).__init__()
         self.use_bn = use_bn
         self.bn = nn.BatchNorm1d(out_dim)
@@ -179,8 +179,8 @@ class Encoder(nn.Module):
         self.fc1 = nn.Linear(self.molvec_dim, self.molvec_dim)
         self.fc2 = nn.Linear(self.molvec_dim, self.molvec_dim)
         self.fc3 = nn.Linear(self.molvec_dim, self.molvec_dim)
-        self.bn1 = nn.BatchNorm1d(self.molvec_dim)
-        self.bn2 = nn.BatchNorm1d(self.molvec_dim)
+        self.bn1 = BN1d(self.molvec_dim)
+        self.bn2 = BN1d(self.molvec_dim)
         self.act = ACT2FN[args.act]
         self.dropout = nn.Dropout(p=args.dp_rate)
 
@@ -231,7 +231,7 @@ class Classifier(nn.Module):
 
         self.fc1 = nn.Linear(self.molvec_dim + self.out_dim, self.in_dim)
         self.fc2 = nn.Linear(self.in_dim, self.in_dim)
-        self.bn1 = nn.BatchNorm1d(self.in_dim)
+        self.bn1 = BN1d(self.in_dim)
         self.act = act
         self.dropout = nn.Dropout(p=dropout_rate)
         self.param_initializer()

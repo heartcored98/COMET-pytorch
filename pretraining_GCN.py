@@ -353,6 +353,7 @@ if __name__ == '__main__':
     parser.add_argument("-b", "--use_bn", type=bool, default=True)
     parser.add_argument("-e", "--emb_train", type=bool, default=True)
     parser.add_argument("-dp", "--dp_rate", type=float, default=0.1)
+    parser.add_argument("--act", type=str, default='gelu')
 
     #===== Optimizer =====#
     parser.add_argument("-u", "--optim", type=str, default='ADAM')
