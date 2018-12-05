@@ -182,12 +182,13 @@ class Encoder(nn.Module):
         self.bn1 = nn.BatchNorm1d(self.molvec_dim)
         self.bn2 = nn.BatchNorm1d(self.molvec_dim)
         self.act = ACT2FN[args.act]
+        self.dropout = nn.Dropout(p=args.dp_rate)
 
 
     def forward(self, input_X, A):
         x, A, molvec = self.encoder(input_X, A)
-        x = self.bn1(self.act(self.fc1(x)))
-        x = self.bn2(self.act(self.fc2(x)))
+        x = self.dropout(self.bn1(self.act(self.fc1(x))))
+        x = self.dropout(self.bn2(self.act(self.fc2(x))))
         x = self.fc3(x)
         return x, A, molvec
 
