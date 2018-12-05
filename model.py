@@ -3,6 +3,20 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.autograd import Variable
+import math
+
+
+#===== Activation =====#
+def gelu(x):
+
+    """ Ref: https://github.com/huggingface/pytorch-pretrained-BERT/blob/master/pytorch_pretrained_bert/modeling.py
+        Implementation of the gelu activation function.
+        For information: OpenAI GPT's gelu is slightly different (and gives slightly different results):
+        0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
+    """
+    return x * 0.5 * (1.0 + torch.erf(x / math.sqrt(2.0)))
+
+ACT2FN = {"gelu": gelu, "relu": torch.nn.functional.relu}
 
 class Attention(nn.Module):
     def __init__(self, input_dim, output_dim, num_attn_head, dropout=0.1):
@@ -47,16 +61,17 @@ class Attention(nn.Module):
 #####################################################
 
 class GConv(nn.Module):
-    def __init__(self, input_dim, output_dim, attn):
+    def __init__(self, input_dim, output_dim, attn, act=ACT2FN['relu']):
         super(GConv, self).__init__()
         self.attn = attn
         if self.attn is None:
             self.fc = nn.Linear(input_dim, output_dim)
+            self.act = act
             nn.init.xavier_normal_(self.fc.weight.data)
 
     def forward(self, X, A):
         if self.attn is None:
-            x = self.fc(X)
+            x = self.act(self.fc(X))
             x = torch.matmul(A, x)
         else:
             x = self.attn(X, A)
@@ -92,7 +107,7 @@ class BN1d(nn.Module):
 
 
 class ResBlock(nn.Module):
-    def __init__(self, in_dim, out_dim, use_bn, use_attn, dp_rate, sc_type, n_attn_head=None):
+    def __init__(self, in_dim, out_dim, use_bn, use_attn, dp_rate, sc_type, n_attn_head=None, act=ACT2FN['relu']):
         super(ResBlock, self).__init__()
         self.use_bn = use_bn
         self.sc_type = sc_type
@@ -102,7 +117,7 @@ class ResBlock(nn.Module):
 
         self.bn1 = BN1d(out_dim, use_bn)
         self.dropout = nn.Dropout2d(p=dp_rate)
-        self.relu = nn.ReLU()
+        self.act = act
 
         if not self.sc_type in ['no', 'gsc', 'sc']:
             raise Exception
@@ -122,21 +137,21 @@ class ResBlock(nn.Module):
         x, A = self.gconv(X, A)
 
         if self.sc_type == 'no':  # no skip-connection
-            x = self.relu(self.bn1(x))
+            x = self.act(self.bn1(x))
             return self.dropout(x), A
 
         elif self.sc_type == 'sc': # basic skip-connection
-            x = self.relu(self.bn1(x))
+            x = self.act(self.bn1(x))
             x = x + self.shortcut(X)
-            return self.dropout(self.relu(self.bn2(x))), A
+            return self.dropout(self.act(self.bn2(x))), A
 
         elif self.sc_type == 'gsc': # gated skip-connection
-            x = self.relu(self.bn1(x))
+            x = self.act(self.bn1(x))
             x1 = self.g_fc1(self.shortcut(X))
             x2 = self.g_fc2(x)
             gate_coef = self.sigmoid(x1 +x2)
             x = torch.mul(x1, gate_coef) + torch.mul(x2, 1.0-gate_coef)
-            return self.dropout(self.relu(self.bn2(x))), A
+            return self.dropout(self.act(self.bn2(x))), A
 
 
 class Encoder(nn.Module):
@@ -147,20 +162,33 @@ class Encoder(nn.Module):
         self.embedding = self.create_emb_layer(args.vocab_size, args.emb_train)
         self.out_dim = args.out_dim
 
+        # Graph Convolution Layers with Readout Layer
         self.gconvs = nn.ModuleList()
         for i in range(args.n_layer):
             if i== 0:
                 self.gconvs.append(
                     ResBlock(args.in_dim, self.out_dim, args.use_bn, args.use_attn, args.dp_rate, args.sc_type,
-                             args.n_attn_heads))
+                             args.n_attn_heads, ACT2FN[args.act]))
             else:
                 self.gconvs.append(
                     ResBlock(self.out_dim, self.out_dim, args.use_bn, args.use_attn, args.dp_rate, args.sc_type,
-                             args.n_attn_heads))
+                             args.n_attn_heads, ACT2FN[args.act]))
         self.readout = Readout(self.out_dim, self.molvec_dim)
+
+        # Molecular Vector Transformation
+        self.fc1 = nn.Linear(self.molvec_dim, self.molvec_dim)
+        self.fc2 = nn.Linear(self.molvec_dim, self.molvec_dim)
+        self.fc3 = nn.Linear(self.molvec_dim, self.molvec_dim)
+        self.bn1 = nn.BatchNorm1d(self.molvec_dim)
+        self.bn2 = nn.BatchNorm1d(self.molvec_dim)
+        self.act = ACT2FN[args.act]
+
 
     def forward(self, input_X, A):
         x, A, molvec = self.encoder(input_X, A)
+        x = self.bn1(self.act(self.fc1(x)))
+        x = self.bn2(self.act(self.fc2(x)))
+        x = self.fc3(x)
         return x, A, molvec
 
     def encoder(self, input_X, A):
@@ -193,7 +221,7 @@ class Encoder(nn.Module):
 
 
 class Classifier(nn.Module):
-    def __init__(self, in_dim, out_dim, molvec_dim, vocab_size, dropout_rate=0.1):
+    def __init__(self, in_dim, out_dim, molvec_dim, vocab_size, dropout_rate=0.1, act=ACT2FN['relu']):
         super(Classifier, self).__init__()
         self.in_dim = in_dim
         self.out_dim = out_dim
@@ -202,8 +230,8 @@ class Classifier(nn.Module):
 
         self.fc1 = nn.Linear(self.molvec_dim + self.out_dim, self.in_dim)
         self.fc2 = nn.Linear(self.in_dim, self.in_dim)
-        self.relu = nn.ReLU()
-        self.tanh = nn.Tanh()
+        self.bn1 = nn.BatchNorm1d(self.in_dim)
+        self.act = act
         self.dropout = nn.Dropout(p=dropout_rate)
         self.param_initializer()
 
@@ -226,7 +254,7 @@ class Classifier(nn.Module):
         return pred_x
 
     def classify(self, concat_x):
-        x = self.dropout(self.relu(self.fc1(concat_x)))
+        x = self.dropout(self.bn1(self.act(self.fc1(concat_x))))
         x = self.fc2(x)
         return x
 
@@ -236,16 +264,17 @@ class Classifier(nn.Module):
 
 
 class Regressor(nn.Module):
-    def __init__(self, molvec_dim, dropout_rate=0.1):
+    def __init__(self, molvec_dim, dropout_rate=0.1, act=ACT2FN['relu']):
         super(Regressor, self).__init__()
 
         self.molvec_dim = molvec_dim
         self.reg_fc1 = nn.Linear(self.molvec_dim, self.molvec_dim // 2)
         self.reg_fc2 = nn.Linear(self.molvec_dim // 2, 1)
+        self.bn1 = nn.BatchNorm1d(self.molvec_dim // 2)
         self.dropout = nn.Dropout(p=dropout_rate)
-        self.relu = nn.ReLU()
+        self.act = act
 
     def forward(self, molvec):
-        x = self.dropout(self.relu(self.reg_fc1(molvec)))
+        x = self.dropout(self.bn1(self.act(self.reg_fc1(molvec))))
         x = self.reg_fc2(x)
         return torch.squeeze(x)
