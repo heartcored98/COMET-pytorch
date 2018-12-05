@@ -283,14 +283,14 @@ def experiment(dataloader, args):
     
     # Construct Model
     encoder = Encoder(args)
-    classifier = Classifier(args.in_dim, args.out_dim, args.molvec_dim, args.vocab_size, args.dp_rate)
+    classifier = Classifier(args.in_dim, args.out_dim, args.molvec_dim, args.vocab_size, args.dp_rate, ACT2FN[args.act])
     models = {'encoder': encoder, 'classifier': classifier}
     if args.train_logp:
-        models.update({'logP': Regressor(args.molvec_dim, args.dp_rate)})
+        models.update({'logP': Regressor(args.molvec_dim, args.dp_rate, ACT2FN[args.act])})
     if args.train_mr:
-        models.update({'mr': Regressor(args.molvec_dim, args.dp_rate)})
+        models.update({'mr': Regressor(args.molvec_dim, args.dp_rate, ACT2FN[args.act])})
     if args.train_tpsa:
-        models.update({'tpsa': Regressor(args.molvec_dim, args.dp_rate)})
+        models.update({'tpsa': Regressor(args.molvec_dim, args.dp_rate, ACT2FN[args.act])})
         
     # Initialize Optimizer
     logger.info('####### Model Constructed #######')
