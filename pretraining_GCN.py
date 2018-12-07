@@ -7,23 +7,44 @@ from dataloader import *
 from utils import *
 from model import *
 
+##########################
+# ===== Compute Loss =====#
+##########################
 
-##########################
-#===== Compute Loss =====#
-##########################
+from sklearn.metrics import accuracy_score
+from sklearn.metrics import mean_absolute_error
+
 
 def compute_loss(pred_x, ground_x, vocab_size):
     batch_size = ground_x.shape[0]
     num_masking = ground_x.shape[1]
     ground_x = ground_x.view(batch_size * num_masking, -1)
-    
-    symbol_loss = F.cross_entropy(pred_x[:,:vocab_size], ground_x[:, 0].detach())
-    degree_loss = F.cross_entropy(pred_x[:,vocab_size:vocab_size+6], ground_x[:,1:7].detach().max(dim=1)[1])
-    numH_loss = F.cross_entropy(pred_x[:,vocab_size+6:vocab_size+11], ground_x[:, 7:12].detach().max(dim=1)[1])
-    valence_loss = F.cross_entropy(pred_x[:,vocab_size+11:vocab_size+17], ground_x[:,12:18].detach().max(dim=1)[1])
-    isarom_loss = F.binary_cross_entropy(torch.sigmoid(pred_x[:,-1]), ground_x[:,-1].detach().float())
-    return symbol_loss, degree_loss, numH_loss, valence_loss, isarom_loss #total_loss
 
+    symbol_loss = F.cross_entropy(pred_x[:, :vocab_size], ground_x[:, 0].detach())
+    degree_loss = F.cross_entropy(pred_x[:, vocab_size:vocab_size + 6], ground_x[:, 1:7].detach().max(dim=1)[1])
+    numH_loss = F.cross_entropy(pred_x[:, vocab_size + 6:vocab_size + 11], ground_x[:, 7:12].detach().max(dim=1)[1])
+    valence_loss = F.cross_entropy(pred_x[:, vocab_size + 11:vocab_size + 17],
+                                   ground_x[:, 12:18].detach().max(dim=1)[1])
+    isarom_loss = F.binary_cross_entropy(torch.sigmoid(pred_x[:, -1]), ground_x[:, -1].detach().float())
+    return symbol_loss, degree_loss, numH_loss, valence_loss, isarom_loss  # total_loss
+
+
+def compute_metric(pred_x, ground_x, vocab_size):
+    batch_size = ground_x.shape[0]
+    num_masking = ground_x.shape[1]
+    ground_x = ground_x.view(batch_size * num_masking, -1)
+
+    symbol_acc = accuracy_score(pred_x[:, :vocab_size].detach().max(dim=1)[1].cpu().numpy(),
+                                ground_x[:, 0].detach().cpu().numpy())
+    degree_acc = accuracy_score(pred_x[:, vocab_size:vocab_size + 6].detach().max(dim=1)[1].cpu().numpy(),
+                                ground_x[:, 1:7].detach().max(dim=1)[1].cpu().numpy())
+    numH_acc = accuracy_score(pred_x[:, vocab_size + 6:vocab_size + 11].detach().max(dim=1)[1].cpu().numpy(),
+                              ground_x[:, 7:12].detach().max(dim=1)[1].cpu().numpy())
+    valence_acc = accuracy_score(pred_x[:, vocab_size + 11:vocab_size + 17].detach().max(dim=1)[1].cpu().numpy(),
+                                 ground_x[:, 12:18].detach().max(dim=1)[1].cpu().numpy())
+    isarom_acc = accuracy_score((torch.sigmoid(pred_x[:, -1]) + 1).floor_().cpu().numpy(),
+                                ground_x[:, -1].detach().cpu().numpy())
+    return symbol_acc, degree_acc, numH_acc, valence_acc, isarom_acc
 
 #######################
 #===== Optimizer =====#
@@ -154,11 +175,10 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
 
 
 ######################################
-#===== Validating and Testing   =====#
+# ===== Validating and Testing   =====#
 ######################################
 
 def validate(models, data_loader, args, **kwargs):
-
     t = time.time()
     cnt_iter = kwargs['cnt_iter']
     epoch = kwargs['epoch']
@@ -175,6 +195,15 @@ def validate(models, data_loader, args, **kwargs):
     list_mr_loss = []
     list_tpsa_loss = []
 
+    list_symbol_acc = []
+    list_degree_acc = []
+    list_numH_acc = []
+    list_valence_acc = []
+    list_isarom_acc = []
+    list_logP_mae = []
+    list_mr_mae = []
+    list_tpsa_mae = []
+
     # Initialization Model with Evaluation Mode
     for _, model in models.items():
         model.eval()
@@ -185,16 +214,17 @@ def validate(models, data_loader, args, **kwargs):
             input_X = Variable(torch.from_numpy(input_X)).to(args.device).long()
             A = Variable(torch.from_numpy(A)).to(args.device).float()
             mol_prop = Variable(torch.from_numpy(mol_prop)).to(args.device).float()
-            logp, mr, tpsa = mol_prop[:,0], mol_prop[:,1], mol_prop[:,2]
+            logp, mr, tpsa = mol_prop[:, 0], mol_prop[:, 1], mol_prop[:, 2]
             ground_X = Variable(torch.from_numpy(ground_X)).to(args.device).long()
             idx_M = Variable(torch.from_numpy(idx_M)).to(args.device).long()
 
             # Encoding Molecule
             X, A, molvec = models['encoder'](input_X, A)
             pred_mask = models['classifier'](X, molvec, idx_M)
-            
+
             # Compute Mask Task Loss & Property Regression Loss
-            symbol_loss, degree_loss, numH_loss, valence_loss, isarom_loss = compute_loss(pred_mask, ground_X, args.vocab_size)
+            symbol_loss, degree_loss, numH_loss, valence_loss, isarom_loss = compute_loss(pred_mask, ground_X,
+                                                                                          args.vocab_size)
             list_symbol_loss.append(symbol_loss.item())
             list_degree_loss.append(degree_loss.item())
             list_numH_loss.append(numH_loss.item())
@@ -202,29 +232,41 @@ def validate(models, data_loader, args, **kwargs):
             list_isarom_loss.append(isarom_loss.item())
             list_mask_loss.append((symbol_loss + degree_loss + numH_loss + valence_loss + isarom_loss).item())
 
+            # Compute Mask Task Accuracy & Property Regression MAE
+            symbol_acc, degree_acc, numH_acc, valence_acc, isarom_acc = compute_metric(pred_mask, ground_X,
+                                                                                       args.vocab_size)
+            list_symbol_acc.append(symbol_acc)
+            list_degree_acc.append(degree_acc)
+            list_numH_acc.append(numH_acc)
+            list_valence_acc.append(valence_acc)
+            list_isarom_acc.append(isarom_acc)
+
             if args.train_logp:
                 pred_logp = models['logP'](molvec)
                 list_logP_loss.append(reg_loss(pred_logp, logp).item())
+                list_logP_mae.append(mean_absolute_error(pred_logp.cpu().detach().numpy(), logp.cpu().detach().numpy()))
             if args.train_mr:
                 pred_mr = models['mr'](molvec)
                 list_mr_loss.append(reg_loss(pred_mr, mr).item())
+                list_mr_mae.append(mean_absolute_error(pred_mr.cpu().detach().numpy(), mr.cpu().detach().numpy()))
             if args.train_tpsa:
                 pred_tpsa = models['tpsa'](molvec)
                 list_tpsa_loss.append(reg_loss(pred_tpsa, tpsa).item())
+                list_tpsa_mae.append(mean_absolute_error(pred_tpsa.cpu().detach().numpy(), tpsa.cpu().detach().numpy()))
 
-            temp_iter += 1   
+            temp_iter += 1
 
             # Prompting Status
             if temp_iter % (args.log_every * 10) == 0:
                 output = "[VALID] E:{:3}. P:{:>2.1f}%. {:4.1f} mol/sec. Iter:{:6}.  Elapsed:{:6.1f} sec."
                 elapsed = time.time() - t
                 process_speed = (args.test_batch_size * args.log_every) / elapsed
-                output = output.format(epoch, batch_idx / len(data_loader) * 100.0, process_speed, temp_iter, elapsed,)
+                output = output.format(epoch, batch_idx / len(data_loader) * 100.0, process_speed, temp_iter, elapsed, )
                 t = time.time()
                 logger.info(output)
 
             del batch
-                
+
     mask_loss = np.mean(np.array(list_mask_loss))
     symbol_loss = np.mean(np.array(list_symbol_loss))
     degree_loss = np.mean(np.array(list_degree_loss))
@@ -232,20 +274,11 @@ def validate(models, data_loader, args, **kwargs):
     valence_loss = np.mean(np.array(list_valence_loss))
     isarom_loss = np.mean(np.array(list_isarom_loss))
 
-    loss = mask_loss
-    if args.train_logp:
-        logP_loss = np.mean(np.array(list_logP_loss))
-        loss += logP_loss
-        val_writer.add_scalar('3.auxilary/logP', logP_loss, cnt_iter)
-    if args.train_mr:
-        mr_loss = np.mean(np.array(list_mr_loss))
-        loss += mr_loss
-        val_writer.add_scalar('3.auxilary/mr', mr_loss, cnt_iter)
-
-    if args.train_tpsa:
-        tpsa_loss = np.mean(np.array(list_tpsa_loss))
-        loss += tpsa_loss
-        val_writer.add_scalar('3.auxilary/tpsa', tpsa_loss, cnt_iter)
+    symbol_acc = np.mean(np.array(list_symbol_acc))
+    degree_acc = np.mean(np.array(list_degree_acc))
+    numH_acc = np.mean(np.array(list_numH_acc))
+    valence_acc = np.mean(np.array(list_valence_acc))
+    isarom_acc = np.mean(np.array(list_isarom_acc))
 
     val_writer.add_scalar('2.mask/symbol', symbol_loss, cnt_iter)
     val_writer.add_scalar('2.mask/degree', degree_loss, cnt_iter)
@@ -253,35 +286,48 @@ def validate(models, data_loader, args, **kwargs):
     val_writer.add_scalar('2.mask/valence', valence_loss, cnt_iter)
     val_writer.add_scalar('2.mask/isarom', isarom_loss, cnt_iter)
 
+    val_writer.add_scalar('4.mask_acc/symbol', symbol_acc, cnt_iter)
+    val_writer.add_scalar('4.mask_acc/degree', degree_acc, cnt_iter)
+    val_writer.add_scalar('4.mask_acc/numH', numH_acc, cnt_iter)
+    val_writer.add_scalar('4.mask_acc/valence', valence_acc, cnt_iter)
+    val_writer.add_scalar('4.mask_acc/isarom', isarom_acc, cnt_iter)
+
+    loss = mask_loss
+    if args.train_logp:
+        logP_loss = np.mean(np.array(list_logP_loss))
+        logP_mae = np.mean(np.array(list_logP_mae))
+        loss += logP_loss
+        val_writer.add_scalar('3.auxilary/logP', logP_loss, cnt_iter)
+        val_writer.add_scalar('5.auxilary_mae/logP', logP_mae, cnt_iter)
+    if args.train_mr:
+        mr_loss = np.mean(np.array(list_mr_loss))
+        mr_mae = np.mean(np.array(list_mr_mae))
+        loss += mr_loss
+        val_writer.add_scalar('3.auxilary/mr', mr_loss, cnt_iter)
+        val_writer.add_scalar('5.auxilary_mae/mr', mr_mae, cnt_iter)
+    if args.train_tpsa:
+        tpsa_loss = np.mean(np.array(list_tpsa_loss))
+        tpsa_mae = np.mean(np.array(list_mr_mae))
+        loss += tpsa_loss
+        val_writer.add_scalar('3.auxilary/tpsa', tpsa_loss, cnt_iter)
+        val_writer.add_scalar('5.auxilary_mae/tpsa', tpsa_mae, cnt_iter)
+
     val_writer.add_scalar('1.status/total', loss, cnt_iter)
     val_writer.add_scalar('1.status/mask', mask_loss, cnt_iter)
 
     # Log model weight historgram
     log_histogram(models, val_writer, cnt_iter)
-    
-    """
-    # Calculate overall MAE and STD value      
-    if args.train_logp:
-        logp_mae = mean_absolute_error(list_logp, list_pred_logp)
-        logp_std = np.std(np.array(list_logp)-np.array(list_pred_logp))
-        
-    if args.train_mr:
-        mr_mae = mean_absolute_error(list_mr, list_pred_mr)
-        mr_std = np.std(np.array(list_mr)-np.array(list_pred_mr))
-        
-    if args.train_tpsa:
-        tpsa_mae = mean_absolute_error(list_tpsa, list_pred_tpsa)
-        tpsa_std = np.std(np.array(list_tpsa)-np.array(list_pred_tpsa))
-    """
 
     output = "[V] E:{:3}. P:{:>2.1f}%. Loss:{:>9.3}. Mask Loss:{:>9.3}. {:4.1f} mol/sec. Iter:{:6}.  Elapsed:{:6.1f} sec."
     elapsed = time.time() - t
     process_speed = (args.test_batch_size * args.log_every) / elapsed
-    output = output.format(epoch, batch_idx / len(data_loader) * 100.0, loss, mask_loss, process_speed, cnt_iter, elapsed,)
+    output = output.format(epoch, batch_idx / len(data_loader) * 100.0, loss, mask_loss, process_speed, cnt_iter,
+                           elapsed, )
     t = time.time()
     logger.info(output)
 
     torch.cuda.empty_cache()
+
 
 def experiment(dataloader, args):
     ts = time.time()
@@ -334,15 +380,13 @@ def experiment(dataloader, args):
     args.elapsed = te-ts
     logger.info('Training Completed')
 
-
-
 if __name__ == '__main__':
     seed = 123
     np.random.seed(seed)
     torch.manual_seed(seed)
 
     parser = argparse.ArgumentParser(description='Add logP, TPSA, MR, PBF value on .smi files')
-    #===== Model Definition =====#
+    # ===== Model Definition =====#
     parser.add_argument("-v", "--vocab_size", type=int, default=41)
     parser.add_argument("-i", "--in_dim", type=int, default=59)
     parser.add_argument("-o", "--out_dim", type=int, default=256)
@@ -358,12 +402,12 @@ if __name__ == '__main__':
     parser.add_argument("-dp", "--dp_rate", type=float, default=0.1)
     parser.add_argument("--act", type=str, default='gelu')
 
-    #===== Optimizer =====#
+    # ===== Optimizer =====#
     parser.add_argument("-u", "--optim", type=str, default='ADAM')
     parser.add_argument("-lf", "--lr_factor", type=float, default=2.0)
     parser.add_argument("-ls", "--lr_step", type=int, default=4000)
 
-    #===== Training =====#
+    # ===== Training =====#
     parser.add_argument("-p", "--train_logp", type=bool, default=True)
     parser.add_argument("-r", "--train_mr", type=bool, default=True)
     parser.add_argument("-t", "--train_tpsa", type=bool, default=True)
@@ -373,28 +417,28 @@ if __name__ == '__main__':
     parser.add_argument("-tbs", "--test_batch_size", type=int, default=512)
     parser.add_argument("-nw", "--num_workers", type=int, default=8)
 
-
-    #===== Logging =====#
-    parser.add_argument("-li", "--log_every", type=int, default=10*10) #Test: 10  #Default 40*10
-    parser.add_argument("-vi", "--validate_every", type=int, default=50*40) #Test:50 #Default 40*50
-    parser.add_argument("-si", "--save_every", type=int, default=40*100) #Test:50 #Default 40*100
+    # ===== Logging =====#
+    parser.add_argument("-li", "--log_every", type=int, default=10 * 10)  # Test: 10  #Default 40*10
+    parser.add_argument("-vi", "--validate_every", type=int, default=100)  # Test:50 #Default 40*50
+    parser.add_argument("-si", "--save_every", type=int, default=40 * 100)  # Test:50 #Default 40*100
 
     parser.add_argument("-mn", "--model_name", type=str, required=True)
     parser.add_argument("--log_path", type=str, default='runs')
-    parser.add_argument("--ck_filename", type=str, default=None) #'model_ck_000_000000100.tar')
-    parser.add_argument("--dataset_path", type=str, default='./dataset/data_s')
+    parser.add_argument("--ck_filename", type=str, default=None)  # 'model_ck_000_000000100.tar')
+    parser.add_argument("--dataset_path", type=str, default='./dataset/data_xxs')
 
-    args = parser.parse_args()
+    args = parser.parse_args()#["-mn", "metric_test_0.5_masking"])
 
-    #===== Experiment Setup =====#
+    # ===== Experiment Setup =====#
     args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
     args.model_explain = make_model_comment(args)
-    train_writer = SummaryWriter(join(args.log_path, args.model_name+'_train'))
-    val_writer = SummaryWriter(join(args.log_path, args.model_name+'_val'))
-    train_writer.add_text(tag='model', text_string='{}:{}'.format(args.model_name, args.model_explain), global_step=0)
-    logger = get_logger(join(args.log_path, args.model_name+'_train'))
+    train_writer = SummaryWriter(join(args.log_path, args.model_name + '_train'))
+    val_writer = SummaryWriter(join(args.log_path, args.model_name + '_val'))
+    train_writer.add_text(tag='model', text_string='{}:{}'.format(args.model_name, args.model_explain),
+                          global_step=0)
+    logger = get_logger(join(args.log_path, args.model_name + '_train'))
 
-    #===== Loading Dataset =====#
+    # ===== Loading Dataset =====#
     train_dataset_path = args.dataset_path + '/train'
     val_dataset_path = args.dataset_path + '/val'
     list_trains = get_dir_files(train_dataset_path)
@@ -407,14 +451,15 @@ if __name__ == '__main__':
                                       shuffle_batch=True,
                                       num_workers=args.num_workers)
 
-    logger.info("##### Loading Train Dataloader #####")
+    logger.info("##### Loading Validation Dataloader #####")
     val_dataloader = zincDataLoader(join(val_dataset_path, list_vals[0]),
-                                      batch_size=args.test_batch_size,
-                                      drop_last=False,
-                                      shuffle_batch=False,
-                                      num_workers=args.num_workers)
-    dataloader = {'train': train_dataloader, 'val': val_dataloader}
+                                    batch_size=args.test_batch_size,
+                                    drop_last=False,
+                                    shuffle_batch=False,
+                                    num_workers=args.num_workers)
 
+    dataloader = {'train': train_dataloader, 'val': val_dataloader}
     logger.info("######## Starting Training ########")
+
     result = experiment(dataloader, args)
 
