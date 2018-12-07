@@ -22,7 +22,6 @@ def compute_loss(pred_x, ground_x, vocab_size):
     numH_loss = F.cross_entropy(pred_x[:,vocab_size+6:vocab_size+11], ground_x[:, 7:12].detach().max(dim=1)[1])
     valence_loss = F.cross_entropy(pred_x[:,vocab_size+11:vocab_size+17], ground_x[:,12:18].detach().max(dim=1)[1])
     isarom_loss = F.binary_cross_entropy(torch.sigmoid(pred_x[:,-1]), ground_x[:,-1].detach().float())
-    # total_loss = symbol_loss + degree_loss + numH_loss + valence_loss + isarom_loss
     return symbol_loss, degree_loss, numH_loss, valence_loss, isarom_loss #total_loss
 
 
@@ -59,7 +58,7 @@ class NoamOpt:
 
 
 ########################
-#===== Experiment =====#
+#===== Training   =====#
 ########################
 
 def train(models, optimizer, dataloader, epoch, cnt_iter, args):
@@ -153,6 +152,10 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
                 
     logger.info('Training Completed')
 
+
+######################################
+#===== Validating and Testing   =====#
+######################################
 
 def validate(models, data_loader, args, **kwargs):
 
@@ -368,6 +371,8 @@ if __name__ == '__main__':
     parser.add_argument("-ep", "--epoch", type=int, default=100)
     parser.add_argument("-bs", "--batch_size", type=int, default=512)
     parser.add_argument("-tbs", "--test_batch_size", type=int, default=512)
+    parser.add_argument("-nw", "--num_workers", type=int, default=8)
+
 
     #===== Logging =====#
     parser.add_argument("-li", "--log_every", type=int, default=10*10) #Test: 10  #Default 40*10
@@ -400,15 +405,16 @@ if __name__ == '__main__':
                                       batch_size=args.batch_size,
                                       drop_last=False,
                                       shuffle_batch=True,
-                                      num_workers=8)
+                                      num_workers=args.num_workers)
 
     logger.info("##### Loading Train Dataloader #####")
     val_dataloader = zincDataLoader(join(val_dataset_path, list_vals[0]),
                                       batch_size=args.test_batch_size,
                                       drop_last=False,
                                       shuffle_batch=False,
-                                      num_workers=8)
-
+                                      num_workers=args.num_workers)
     dataloader = {'train': train_dataloader, 'val': val_dataloader}
+
+    logger.info("######## Starting Training ########")
     result = experiment(dataloader, args)
 
