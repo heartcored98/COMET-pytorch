@@ -34,6 +34,7 @@ class Attention(nn.Module):
     def forward(self, X, A):
         list_X_head = list()
         for i in range(self.num_attn_heads):
+            print("in attention {}th head".format(i), X.shape, A.shape)
             X_projected = self.projection[i](X)
             attn_matrix = self.attn_coeff(X_projected, A, self.coef_matrix[i])
             X_head = torch.matmul(attn_matrix, X_projected)
@@ -159,7 +160,9 @@ class Encoder(nn.Module):
         super(Encoder, self).__init__()
         self.bs = args.batch_size
         self.molvec_dim = args.molvec_dim
-        self.embedding = self.create_emb_layer(args.vocab_size, args.emb_train)
+        self.embedding = self.create_emb_layer([args.vocab_size,args.degree_size,
+                                                args.numH_size, args.isarom_size,
+                                                args.valence_size],  args.emb_train)
         self.out_dim = args.out_dim
 
         # Graph Convolution Layers with Readout Layer
@@ -195,25 +198,30 @@ class Encoder(nn.Module):
     def encoder(self, input_X, A):
         x = self._embed(input_X)
         for i, module in enumerate(self.gconvs):
+            print("{}th layer".format(i))
             x, A = module(x, A)
         molvec = self.readout(x)
         return x, A, molvec
 
     def _embed(self, x):
-        embed_x = self.embedding(x[:, :, 0])
-        x = torch.cat((embed_x.float(), x[:, :, 1:].float()), 2)
+        list_embed = list()
+        for i in range(5):
+            list_embed.append(self.embedding[i](x[:, :, i]))
+        x = torch.cat(list_embed, 2)
+        print('embed', x.shape)
         return x
 
-    def create_emb_layer(self, vocab_size, emb_train=False):
-        emb_layer = nn.Embedding(vocab_size, vocab_size)
-        weight_matrix = torch.zeros((vocab_size, vocab_size))
-        for i in range(vocab_size):
-            weight_matrix[i][i] = 1
-        emb_layer.load_state_dict({'weight': weight_matrix})
-
-        if not emb_train:
-            emb_layer.weight.requires_grad = False
-        return emb_layer
+    def create_emb_layer(self, list_vocab_size, emb_train=False):
+        list_emb_layer = nn.ModuleList()
+        for vocab_size in list_vocab_size:
+            emb_layer = nn.Embedding(vocab_size, vocab_size)
+            weight_matrix = torch.zeros((vocab_size, vocab_size))
+            for i in range(vocab_size):
+                weight_matrix[i][i] = 1
+            emb_layer.load_state_dict({'weight': weight_matrix})
+            emb_layer.weight.requires_grad = emb_train
+            list_emb_layer.append(emb_layer)
+        return list_emb_layer
 
 
 ####################################

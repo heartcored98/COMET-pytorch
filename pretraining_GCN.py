@@ -95,56 +95,70 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
             # Setting Train Mode
             for _, model in models.items():
                 model.train()
-            optimizer.zero_grad()
+
+            optimizer['mask'].zero_grad()
+            optimizer['auxiliary'].zero_grad()
+
 
             # Get Batch Sample from DataLoader
-            input_X, A, mol_prop, ground_X, idx_M = batch
-            input_X = Variable(torch.from_numpy(input_X)).to(args.device).long()
+            origin_X, masked_X, A, mol_prop, ground_X, idx_M = batch
+            origin_X = Variable(torch.from_numpy(origin_X)).to(args.device).long()
+            masked_X = Variable(torch.from_numpy(masked_X)).to(args.device).long()
             A = Variable(torch.from_numpy(A)).to(args.device).float()
             mol_prop = Variable(torch.from_numpy(mol_prop)).to(args.device).float()
             logp, mr, tpsa = mol_prop[:,0], mol_prop[:,1], mol_prop[:,2]
             ground_X = Variable(torch.from_numpy(ground_X)).to(args.device).long()
             idx_M = Variable(torch.from_numpy(idx_M)).to(args.device).long()
 
-            # Encoding Molecule
-            X, A, molvec = models['encoder'](input_X, A)
-            pred_mask = models['classifier'](X, molvec, idx_M)
+            # Encoding Masked Molecule
+            encoded_X, _, molvec = models['encoder'](masked_X, A)
+            pred_mask = models['classifier'](encoded_X, molvec, idx_M)
 
-            # Compute Mask Task Loss & Property Regression Loss
+            # Compute Mask Task Loss
             symbol_loss, degree_loss, numH_loss, valence_loss, isarom_loss = compute_loss(pred_mask, ground_X, args.vocab_size)
             mask_loss = symbol_loss + degree_loss + numH_loss + valence_loss + isarom_loss
-            loss = mask_loss
-
-            if args.train_logp:
-                pred_logp = models['logP'](molvec)
-                logP_loss = reg_loss(pred_logp, logp)
-                loss += logP_loss
-                train_writer.add_scalar('3.auxilary/logP', logP_loss, cnt_iter)
-            if args.train_mr:
-                pred_mr = models['mr'](molvec)
-                mr_loss = reg_loss(pred_mr, mr)
-                loss += mr_loss
-                train_writer.add_scalar('3.auxilary/mr', mr_loss, cnt_iter)
-
-            if args.train_tpsa:
-                pred_tpsa = models['tpsa'](molvec)
-                tpsa_loss = reg_loss(pred_tpsa, tpsa)
-                loss += tpsa_loss
-                train_writer.add_scalar('3.auxilary/tpsa', tpsa_loss, cnt_iter)
 
             train_writer.add_scalar('2.mask/symbol', symbol_loss, cnt_iter)
             train_writer.add_scalar('2.mask/degree', degree_loss, cnt_iter)
             train_writer.add_scalar('2.mask/numH', numH_loss, cnt_iter)
             train_writer.add_scalar('2.mask/valence', valence_loss, cnt_iter)
             train_writer.add_scalar('2.mask/isarom', isarom_loss, cnt_iter)
-
-            train_writer.add_scalar('1.status/total', loss, cnt_iter)
             train_writer.add_scalar('1.status/mask', mask_loss, cnt_iter)
 
             # Backprogating and Updating Parameter
-            loss.backward()
-            optimizer.step(cnt_iter)
-            train_writer.add_scalar('1.status/lr', optimizer.rate(cnt_iter), cnt_iter)
+            mask_loss.backward()
+            optimizer['mask'].step(cnt_iter)
+            train_writer.add_scalar('1.status/lr', optimizer['mask'].rate(cnt_iter), cnt_iter)
+            torch.cuda.empty_cache()
+
+            # Encoding Original Molecule
+            auxiliary_loss = torch.Tensor(0)
+            if args.train_logP or args.train_mr or args.train_tpsa:
+                _, _, molvec = models['encoder'][origin_X, A]
+
+            # Compute Loss of Original Molecule Property
+            if args.train_logp:
+                pred_logp = models['logP'](molvec)
+                logP_loss = reg_loss(pred_logp, logp)
+                auxiliary_loss += logP_loss
+                train_writer.add_scalar('3.auxiliary/logP', logP_loss, cnt_iter)
+            if args.train_mr:
+                pred_mr = models['mr'](molvec)
+                mr_loss = reg_loss(pred_mr, mr)
+                auxiliary_loss += mr_loss
+                train_writer.add_scalar('3.auxiliary/mr', mr_loss, cnt_iter)
+            if args.train_tpsa:
+                pred_tpsa = models['tpsa'](molvec)
+                tpsa_loss = reg_loss(pred_tpsa, tpsa)
+                auxiliary_loss += tpsa_loss
+                train_writer.add_scalar('3.auxiliary/tpsa', tpsa_loss, cnt_iter)
+
+            if args.train_logP or args.train_mr or args.train_tpsa:
+                train_writer.add_scalar('1.status/auxiliary', auxiliary_loss, cnt_iter)
+                auxiliary_loss.backward()
+                optimizer['auxiliary'].step(cnt_iter)
+                torch.cuda.empty_cache()
+
             cnt_iter += 1
             setattr(args, 'epoch_now', epoch)
             setattr(args, 'iter_now', cnt_iter)
@@ -154,7 +168,7 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
                 output = "[TRAIN] E:{:3}. P:{:>2.1f}%. Loss:{:>9.3}. Mask Loss:{:>9.3}. {:4.1f} mol/sec. Iter:{:6}.  Elapsed:{:6.1f} sec."
                 elapsed = time.time() - t
                 process_speed = (args.batch_size * args.log_every) / elapsed
-                output = output.format(epoch, batch_idx / len(dataloader['train']) * 100.0, loss, mask_loss, process_speed, cnt_iter, elapsed,)
+                output = output.format(epoch, batch_idx / len(dataloader['train']) * 100.0, mask_loss, auxiliary_loss, process_speed, cnt_iter, elapsed,)
                 t = time.time()
                 logger.info(output)
 
@@ -185,6 +199,7 @@ def validate(models, data_loader, args, **kwargs):
     temp_iter = 0
     reg_loss = nn.MSELoss()
 
+    # For Loss
     list_mask_loss = []
     list_symbol_loss = []
     list_degree_loss = []
@@ -195,6 +210,7 @@ def validate(models, data_loader, args, **kwargs):
     list_mr_loss = []
     list_tpsa_loss = []
 
+    # For Accuracy & MAE metric
     list_symbol_acc = []
     list_degree_acc = []
     list_numH_acc = []
@@ -204,23 +220,32 @@ def validate(models, data_loader, args, **kwargs):
     list_mr_mae = []
     list_tpsa_mae = []
 
+    # For F1-Score Metric & Confusion Matrix
+    confusion_symbol_pred = []
+    confusion_degree_pred = []
+    confusion_numH_pred = []
+    confusion_valence_pred = []
+    confusion_isarom_pred = []
+
+
     # Initialization Model with Evaluation Mode
     for _, model in models.items():
         model.eval()
 
     with torch.no_grad():
         for batch_idx, batch in enumerate(data_loader):
-            input_X, A, mol_prop, ground_X, idx_M = batch
-            input_X = Variable(torch.from_numpy(input_X)).to(args.device).long()
+            origin_X, masked_X, A, mol_prop, ground_X, idx_M = batch
+            origin_X = Variable(torch.from_numpy(origin_X)).to(args.device).long()
+            masked_X = Variable(torch.from_numpy(masked_X)).to(args.device).long()
             A = Variable(torch.from_numpy(A)).to(args.device).float()
             mol_prop = Variable(torch.from_numpy(mol_prop)).to(args.device).float()
             logp, mr, tpsa = mol_prop[:, 0], mol_prop[:, 1], mol_prop[:, 2]
             ground_X = Variable(torch.from_numpy(ground_X)).to(args.device).long()
             idx_M = Variable(torch.from_numpy(idx_M)).to(args.device).long()
 
-            # Encoding Molecule
-            X, A, molvec = models['encoder'](input_X, A)
-            pred_mask = models['classifier'](X, molvec, idx_M)
+            # Encoding Masked Molecule
+            encoded_X, _, molvec = models['encoder'](masked_X, A)
+            pred_mask = models['classifier'](encoded_X, molvec, idx_M)
 
             # Compute Mask Task Loss & Property Regression Loss
             symbol_loss, degree_loss, numH_loss, valence_loss, isarom_loss = compute_loss(pred_mask, ground_X,
@@ -240,6 +265,13 @@ def validate(models, data_loader, args, **kwargs):
             list_numH_acc.append(numH_acc)
             list_valence_acc.append(valence_acc)
             list_isarom_acc.append(isarom_acc)
+
+            # Accumulate Mask Task Confusion Matrix for F1-Metric
+
+
+
+            if args.train_logP or args.train_mr or args.train_tpsa:
+                _, _, molvec = models['encoder'][origin_X, A]
 
             if args.train_logp:
                 pred_logp = models['logP'](molvec)
@@ -267,6 +299,7 @@ def validate(models, data_loader, args, **kwargs):
 
             del batch
 
+    # Averaging Loss across the batch
     mask_loss = np.mean(np.array(list_mask_loss))
     symbol_loss = np.mean(np.array(list_symbol_loss))
     degree_loss = np.mean(np.array(list_degree_loss))
@@ -292,40 +325,39 @@ def validate(models, data_loader, args, **kwargs):
     val_writer.add_scalar('4.mask_acc/valence', valence_acc, cnt_iter)
     val_writer.add_scalar('4.mask_acc/isarom', isarom_acc, cnt_iter)
 
-    loss = mask_loss
+    auxiliary_loss = torch.Tensor(0)
     if args.train_logp:
         logP_loss = np.mean(np.array(list_logP_loss))
         logP_mae = np.mean(np.array(list_logP_mae))
-        loss += logP_loss
-        val_writer.add_scalar('3.auxilary/logP', logP_loss, cnt_iter)
-        val_writer.add_scalar('5.auxilary_mae/logP', logP_mae, cnt_iter)
+        auxiliary_loss += logP_loss
+        val_writer.add_scalar('3.auxiliary/logP', logP_loss, cnt_iter)
+        val_writer.add_scalar('5.auxiliary_mae/logP', logP_mae, cnt_iter)
     if args.train_mr:
         mr_loss = np.mean(np.array(list_mr_loss))
         mr_mae = np.mean(np.array(list_mr_mae))
-        loss += mr_loss
-        val_writer.add_scalar('3.auxilary/mr', mr_loss, cnt_iter)
-        val_writer.add_scalar('5.auxilary_mae/mr', mr_mae, cnt_iter)
+        auxiliary_loss += mr_loss
+        val_writer.add_scalar('3.auxiliary/mr', mr_loss, cnt_iter)
+        val_writer.add_scalar('5.auxiliary_mae/mr', mr_mae, cnt_iter)
     if args.train_tpsa:
         tpsa_loss = np.mean(np.array(list_tpsa_loss))
         tpsa_mae = np.mean(np.array(list_mr_mae))
-        loss += tpsa_loss
-        val_writer.add_scalar('3.auxilary/tpsa', tpsa_loss, cnt_iter)
-        val_writer.add_scalar('5.auxilary_mae/tpsa', tpsa_mae, cnt_iter)
+        auxiliary_loss += tpsa_loss
+        val_writer.add_scalar('3.auxiliary/tpsa', tpsa_loss, cnt_iter)
+        val_writer.add_scalar('5.auxiliary_mae/tpsa', tpsa_mae, cnt_iter)
 
-    val_writer.add_scalar('1.status/total', loss, cnt_iter)
+    val_writer.add_scalar('1.status/auxiliary', auxiliary_loss, cnt_iter)
     val_writer.add_scalar('1.status/mask', mask_loss, cnt_iter)
 
     # Log model weight historgram
     log_histogram(models, val_writer, cnt_iter)
 
-    output = "[V] E:{:3}. P:{:>2.1f}%. Loss:{:>9.3}. Mask Loss:{:>9.3}. {:4.1f} mol/sec. Iter:{:6}.  Elapsed:{:6.1f} sec."
+    output = "[V] E:{:3}. P:{:>2.1f}%. Mask Loss:{:>9.3}. Aux Loss:{:>9.3}. {:4.1f} mol/sec. Iter:{:6}.  Elapsed:{:6.1f} sec."
     elapsed = time.time() - t
     process_speed = (args.test_batch_size * args.log_every) / elapsed
-    output = output.format(epoch, batch_idx / len(data_loader) * 100.0, loss, mask_loss, process_speed, cnt_iter,
+    output = output.format(epoch, batch_idx / len(data_loader) * 100.0, mask_loss, auxiliary_loss, process_speed, cnt_iter,
                            elapsed, )
     t = time.time()
     logger.info(output)
-
     torch.cuda.empty_cache()
 
 
@@ -334,7 +366,7 @@ def experiment(dataloader, args):
     
     # Construct Model
     encoder = Encoder(args)
-    classifier = Classifier(args.in_dim, args.out_dim, args.molvec_dim, args.vocab_size, args.dp_rate, ACT2FN[args.act])
+    classifier = Classifier(args.in_dim, args.out_dim, args.molvec_dim, args.classifier_dim, args.dp_rate, ACT2FN[args.act])
     models = {'encoder': encoder, 'classifier': classifier}
     if args.train_logp:
         models.update({'logP': Regressor(args.molvec_dim, args.dp_rate, ACT2FN[args.act])})
@@ -345,35 +377,46 @@ def experiment(dataloader, args):
         
     # Initialize Optimizer
     logger.info('####### Model Constructed #######')
-    trainable_parameters = list()
+    mask_trainable_parameters = list()
+    auxiliary_trainable_parameters = list()
     for key, model in models.items():
         model.to(args.device)
-        trainable_parameters += list(filter(lambda p: p.requires_grad, model.parameters()))
+        if key in ['encoder', 'classifier']:
+            mask_trainable_parameters += list(filter(lambda p: p.requires_grad, model.parameters()))
+        if key in ['encoder', 'logP', 'mr', 'tpsa']:
+            auxiliary_trainable_parameters += list(filter(lambda p: p.requires_grad, model.parameters()))
         logger.info('{:10}: {:>10} parameters'.format(key, sum(p.numel() for p in model.parameters())))
         setattr(args, '{}_param'.format(key), sum(p.numel() for p in model.parameters()))
     logger.info('#################################')
     
     if args.optim == 'ADAM':
-        optimizer = optim.Adam(trainable_parameters, lr=0, betas=(0.9, 0.98), eps=1e-9)
+        mask_optimizer = optim.Adam(mask_trainable_parameters, lr=0, betas=(0.9, 0.98), eps=1e-9)
+        auxiliary_optimizer = optim.Adam(auxiliary_trainable_parameters, lr=0, betas=(0.9, 0.98), eps=1e-9)
     elif args.optim == 'RMSProp':
-        optimizer = optim.RMSprop(trainable_parameters, lr=0)
+        mask_optimizer = optim.RMSprop(mask_trainable_parameters, lr=0)
+        auxiliary_optimizer = optim.RMSprop(auxiliary_trainable_parameters, lr=0)
     elif args.optim == 'SGD':
-        optimizer = optim.SGD(trainable_parameters, lr=0)
+        mask_optimizer = optim.SGD(mask_trainable_parameters, lr=0)
+        auxiliary_optimizer = optim.SGD(auxiliary_trainable_parameters, lr=0)
     else:
         assert False, "Undefined Optimizer Type"
+    optimizers = {'mask':mask_optimizer, 'auxiliary':auxiliary_optimizer}
 
     # Reload Checkpoint Model
     epoch = 0
     cnt_iter = 0
     if args.ck_filename:
-        epoch, cnt_iter, models, optimizer = load_checkpoint(models, optimizer, args.ck_filename, args)
+        epoch, cnt_iter, models, optimizer = load_checkpoint(models, optimizers, args.ck_filename, args)
         logger.info('Loaded Model from {}'.format(args.ck_filename))
     
-    optimizer = NoamOpt(args.out_dim, args.lr_factor, args.lr_step, optimizer)
+    mask_optimizer = NoamOpt(args.out_dim, args.lr_factor, args.lr_step, mask_optimizer)
+    auxiliary_optimizer = NoamOpt(args.out_dim, args.lr_factor, args.lr_step, auxiliary_optimizer)
+    optimizers = {'mask':mask_optimizer, 'auxiliary':auxiliary_optimizer}
+
     log_histogram(models, val_writer, cnt_iter)
 
     # Train Model
-    train(models, optimizer, dataloader, epoch, cnt_iter, args)
+    train(models, optimizers, dataloader, epoch, cnt_iter, args)
 
     # Logging Experiment Result
     te = time.time()    
@@ -387,10 +430,16 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Add logP, TPSA, MR, PBF value on .smi files')
     # ===== Model Definition =====#
-    parser.add_argument("-v", "--vocab_size", type=int, default=41)
-    parser.add_argument("-i", "--in_dim", type=int, default=59)
-    parser.add_argument("-o", "--out_dim", type=int, default=256)
-    parser.add_argument("-m", "--molvec_dim", type=int, default=256)
+    parser.add_argument("--vocab_size", type=int, default=41)
+    parser.add_argument("--degree_size", type=int, default=7)
+    parser.add_argument("--numH_size", type=int, default=6)
+    parser.add_argument("--valence_size", type=int, default=7)
+    parser.add_argument("--isarom_size", type=int, default=3)
+
+    parser.add_argument("--in_dim", type=int, default=64)
+    parser.add_argument("--classifier_dim", type=int, default=59)
+    parser.add_argument("--out_dim", type=int, default=256)
+    parser.add_argument("--molvec_dim", type=int, default=256)
 
     parser.add_argument("-n", "--n_layer", type=int, default=4)
     parser.add_argument("-k", "--n_attn_heads", type=int, default=8)
@@ -428,7 +477,7 @@ if __name__ == '__main__':
     parser.add_argument("-mn", "--model_name", type=str, required=True)
     parser.add_argument("--log_path", type=str, default='runs')
     parser.add_argument("--ck_filename", type=str, default=None)  # 'model_ck_000_000000100.tar')
-    parser.add_argument("--dataset_path", type=str, default='./dataset/data_xs')
+    parser.add_argument("--dataset_path", type=str, default='./dataset/data_xxs')
 
     args = parser.parse_args()#["-mn", "metric_test_0.5_masking"])
 

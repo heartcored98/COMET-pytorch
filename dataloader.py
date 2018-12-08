@@ -98,7 +98,9 @@ def masking_feature(feature, num_masking, erase_rate):
             
         # Masking IsAromatic
         if prob_masking[4] < ERASE_RATE:
-            masked_feature[i, 4] = (masked_feature[i, 4]+1)%2
+            masked_feature[i, 4] = 0
+        elif prob_masking[4] > 1- ((1-ERASE_RATE) * 0.5):
+            masked_feature[i, 4] = np.random.randint(1, 3)
 
     return masked_feature, ground_truth, masking_indices
 
