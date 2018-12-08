@@ -411,6 +411,9 @@ if __name__ == '__main__':
     parser.add_argument("-p", "--train_logp", type=bool, default=True)
     parser.add_argument("-r", "--train_mr", type=bool, default=True)
     parser.add_argument("-t", "--train_tpsa", type=bool, default=True)
+    parser.add_argument("-mr", "--masking_rate", type=float, default=0.15)
+    parser.add_argument("-er", "--erase_rate", type=float, default=0.5)
+
 
     parser.add_argument("-ep", "--epoch", type=int, default=100)
     parser.add_argument("-bs", "--batch_size", type=int, default=512)
@@ -425,7 +428,7 @@ if __name__ == '__main__':
     parser.add_argument("-mn", "--model_name", type=str, required=True)
     parser.add_argument("--log_path", type=str, default='runs')
     parser.add_argument("--ck_filename", type=str, default=None)  # 'model_ck_000_000000100.tar')
-    parser.add_argument("--dataset_path", type=str, default='./dataset/data_xxs')
+    parser.add_argument("--dataset_path", type=str, default='./dataset/data_xs')
 
     args = parser.parse_args()#["-mn", "metric_test_0.5_masking"])
 
@@ -449,14 +452,18 @@ if __name__ == '__main__':
                                       batch_size=args.batch_size,
                                       drop_last=False,
                                       shuffle_batch=True,
-                                      num_workers=args.num_workers)
+                                      num_workers=args.num_workers,
+                                      masking_rate=args.masking_rate,
+                                      erase_rate=args.erase_rate)
 
     logger.info("##### Loading Validation Dataloader #####")
     val_dataloader = zincDataLoader(join(val_dataset_path, list_vals[0]),
                                     batch_size=args.test_batch_size,
                                     drop_last=False,
                                     shuffle_batch=False,
-                                    num_workers=args.num_workers)
+                                    num_workers=args.num_workers,
+                                    masking_rate = args.masking_rate,
+                                    erase_rate = args.erase_rate)
 
     dataloader = {'train': train_dataloader, 'val': val_dataloader}
     logger.info("######## Starting Training ########")

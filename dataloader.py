@@ -10,7 +10,8 @@ import numpy as np
 import pandas as pd
 
 
-
+MASKING_RATE = 0
+ERASE_RATE = 0
 
 
 def atom_feature(atom):
@@ -19,9 +20,9 @@ def atom_feature(atom):
                                'Li', 'Na', 'K', 'Mg', 'Ca', 'Fe', 'As', 'Al', 'I', 'B',
                                'V', 'Tl', 'Sb', 'Sn', 'Ag', 'Pd', 'Co', 'Se', 'Ti', 'Zn',
                                'Ge', 'Cu', 'Au', 'Ni', 'Cd', 'Mn', 'Cr', 'Pt', 'Hg', 'Pb']) +
-                    one_of_k_encoding_unk(atom.GetDegree(), [0, 1, 2, 3, 4, 5]) +
-                    one_of_k_encoding_unk(atom.GetTotalNumHs(), [0, 1, 2, 3, 4]) +
-                    one_of_k_encoding_unk(atom.GetImplicitValence(), [0, 1, 2, 3, 4, 5]) +
+                    char_to_ix(atom.GetDegree(), [0, 1, 2, 3, 4, 5]) +
+                    char_to_ix(atom.GetTotalNumHs(), [0, 1, 2, 3, 4]) +
+                    char_to_ix(atom.GetImplicitValence(), [0, 1, 2, 3, 4, 5]) +
                     [atom.GetIsAromatic()])    # (40, 6, 5, 6, 1)
 
 
@@ -36,6 +37,7 @@ def char_to_ix(x, allowable_set):
     if x not in allowable_set:
         return [0] # Unknown Atom Token
     return [allowable_set.index(x)+1]
+
 
 
 def random_onehot(size):
@@ -53,7 +55,7 @@ def normalize_adj(mx):
     return r_inv.dot(mx).dot(r_inv)
 
 
-def masking_feature(feature, num_masking):
+def masking_feature(feature, num_masking, erase_rate):
     """ Given feature, select 'num_masking' node feature and perturbate them.
     
         [5 features : Atom symbol, degree, num Hs, valence, isAromatic]  
@@ -65,69 +67,72 @@ def masking_feature(feature, num_masking):
         
         return original hode feature with their corresponding indices
     """
-    MASKING_RATE = 0.15
-    ERASE_RATE = 0.5
+    ERASE_RATE = erase_rate
     
     masking_indices = np.random.choice(len(feature), num_masking, replace=False)
     ground_truth = np.copy(feature[masking_indices, :])
+    masked_feature = np.copy(feature)
     for i in masking_indices:
         prob_masking = np.random.rand(5)
         # Masking Atom Symbol 
         if prob_masking[0] < ERASE_RATE:
-            feature[i, 0] = 0
+            masked_feature[i, 0] = 0
         elif prob_masking[0] > 1- ((1-ERASE_RATE) * 0.5):
-            feature[i, 0] = np.random.randint(1, 41)
+            masked_feature[i, 0] = np.random.randint(1, 41)
             
         # Masking Degree 
         if prob_masking[1] < ERASE_RATE:
-            feature[i, 1:7] = np.zeros(6)
+            masked_feature[i, 1] = 0
         elif prob_masking[1] > 1- ((1-ERASE_RATE) * 0.5):
-            feature[i, 1:7] =  random_onehot(6)
+            masked_feature[i, 1] = np.random.randint(1, 7)
         
         # Masking Num Hs
         if prob_masking[2] < ERASE_RATE:
-            feature[i, 7:12] = np.zeros(5)
+            masked_feature[i, 2] = 0
         elif prob_masking[2] > 1- ((1-ERASE_RATE) * 0.5):
-            feature[i, 7:12] =  random_onehot(5)
+            masked_feature[i, 2] = np.random.randint(1, 6)
             
         # Masking Valence
         if prob_masking[3] < ERASE_RATE:
-            feature[i, 12:18] = np.zeros(6)
+            masked_feature[i, 3] = 0
         elif prob_masking[3] > 1- ((1-ERASE_RATE) * 0.5):
-            feature[i, 12:18] =  random_onehot(6)
+            masked_feature[i, 3] = np.random.randint(1, 7)
             
         # Masking IsAromatic
         if prob_masking[4] < ERASE_RATE:
-            feature[i, 18] = (feature[i, 18]+1)%2
+            masked_feature[i, 4] = (masked_feature[i, 4]+1)%2
 
-    return feature, ground_truth, masking_indices
+    return masked_feature, ground_truth, masking_indices
 
 
 def postprocess_batch(mini_batch):
-    
-    MASKING_RATE = 0.15
-    ERASE_RATE = 0.5
+    # Assign masking and erase rate from global variables
+    masking_rate = MASKING_RATE
+    erase_rate = ERASE_RATE
+
     """ Given mini-batch sample, adjacency matrix and node feature vectors were padded with zero. """
     max_length = int(max([row[0] for row in mini_batch]))
     min_length = int(min([row[0] for row in mini_batch]))
-    num_masking = max(1, int(max_length * MASKING_RATE))
+    num_masking = max(1, int(min_length * masking_rate))
     batch_length = len(mini_batch)
-    batch_feature = np.zeros((batch_length, max_length, mini_batch[0][1].shape[1]), dtype=int)
+    batch_masked_feature = np.zeros((batch_length, max_length, mini_batch[0][1].shape[1]), dtype=int)
+    batch_original_feature = np.zeros((batch_length, max_length, mini_batch[0][1].shape[1]), dtype=int)
     batch_adj = np.zeros((batch_length, max_length, max_length))
     batch_property = np.zeros((batch_length, 3))
     batch_ground = np.zeros((batch_length, num_masking, mini_batch[0][1].shape[1]), dtype=int)
     batch_masking = np.zeros((batch_length, num_masking), dtype=int)
     
     for i, row in enumerate(mini_batch):
-        mol_length, feature, adj = int(row[0]), row[1], row[2]
-        masked_feature, ground_truth, masking_indices  = masking_feature(feature, num_masking)
-        batch_feature[i, :mol_length, :] = masked_feature
+        mol_length, original_feature, adj = int(row[0]), row[1], row[2]
+        masked_feature, ground_truth, masking_indices  = masking_feature(original_feature, num_masking, erase_rate)
+        batch_masked_feature[i, :mol_length, :] = masked_feature
+        batch_original_feature[i, :mol_length, :] = original_feature
         batch_ground[i, :, :] = ground_truth
         batch_masking[i, :] = masking_indices
         batch_adj[i, :mol_length, :mol_length] = normalize_adj(adj+np.eye(len(adj)))
         batch_property[i, :] = [row[3], row[4], row[5]]
         
-    return batch_feature, batch_adj, batch_property, batch_ground, batch_masking
+    return batch_original_feature, batch_masked_feature, batch_adj, batch_property, batch_ground, batch_masking
 
 
 class BatchSampler(Sampler):
@@ -197,7 +202,11 @@ class zincDataset(Dataset):
         return self.data['length']
     
 class zincDataLoader(DataLoader):
-    def __init__(self, data_path, batch_size, drop_last, shuffle_batch, num_workers):
+    def __init__(self, data_path, batch_size, drop_last, shuffle_batch, num_workers, masking_rate, erase_rate):
+        global MASKING_RATE, ERASE_RATE
+        MASKING_RATE = masking_rate
+        ERASE_RATE = erase_rate
+
         train_dataset = zincDataset(data_path=data_path)
         sampler = SequentialSampler(train_dataset)
         SortedBatchSampler = BatchSampler(sampler=sampler, batch_size=batch_size, drop_last=drop_last, shuffle_batch=shuffle_batch)
