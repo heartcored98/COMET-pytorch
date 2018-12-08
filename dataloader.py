@@ -25,19 +25,17 @@ def atom_feature(atom):
                     char_to_ix(atom.GetImplicitValence(), [0, 1, 2, 3, 4, 5]) +
                     [atom.GetIsAromatic()])    # (40, 6, 5, 6, 1)
 
+def char_to_ix(x, allowable_set):
+    if x not in allowable_set:
+        return [0] # Unknown Atom Token
+    return [allowable_set.index(x)+1]
+
 
 def one_of_k_encoding_unk(x, allowable_set):
     """Maps inputs not in the allowable set to the last element."""
     if x not in allowable_set:
         x = allowable_set[-1]
     return list(map(lambda s: x == s, allowable_set))
-
-
-def char_to_ix(x, allowable_set):
-    if x not in allowable_set:
-        return [0] # Unknown Atom Token
-    return [allowable_set.index(x)+1]
-
 
 
 def random_onehot(size):
@@ -139,7 +137,7 @@ class BatchSampler(Sampler):
 
     def __init__(self, sampler, batch_size, drop_last=False, shuffle_batch=False):
 
-        if not isinstance(batch_size, _int_classes) or isinstance(batch_size, bool) or                 batch_size <= 0:
+        if not isinstance(batch_size, _int_classes) or isinstance(batch_size, bool) or batch_size <= 0:
             raise ValueError("batch_size should be a positive integeral value, "
                              "but got batch_size={}".format(batch_size))
         if not isinstance(drop_last, bool):
