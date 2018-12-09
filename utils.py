@@ -122,7 +122,6 @@ def log_histogram(models, writer, cnt_iter):
 
 
 def plot_confusion_matrix(cm, labels, classes=None, title='Confusion matrix', normalize=True, figsize=(3,3)):
-
     if normalize:
         de = cm.sum(axis=1)[:, np.newaxis]
         de[de == 0] =1
@@ -151,12 +150,10 @@ def plot_confusion_matrix(cm, labels, classes=None, title='Confusion matrix', no
     ax.yaxis.tick_left()
     ax.set_title(title, fontdict={'fontsize': 6})
 
-
     fmt = '.2f' if normalize else 'd'
     for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
         ax.text(j, i, format(cm[i, j], fmt) if cm[i,j]!=0 else '.', horizontalalignment="center", fontsize=6, verticalalignment='center', color= "black")
     fig.set_tight_layout(True)
-
     return fig
 
 def f1_macro(cm):
