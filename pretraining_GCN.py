@@ -372,11 +372,17 @@ def validate(models, data_loader, args, **kwargs):
     val_writer.add_scalar('2.mask/valence', valence_loss, cnt_iter)
     val_writer.add_scalar('2.mask/isarom', isarom_loss, cnt_iter)
 
-    val_writer.add_scalar('4.mask_acc/symbol', symbol_acc, cnt_iter)
-    val_writer.add_scalar('4.mask_acc/degree', degree_acc, cnt_iter)
-    val_writer.add_scalar('4.mask_acc/numH', numH_acc, cnt_iter)
-    val_writer.add_scalar('4.mask_acc/valence', valence_acc, cnt_iter)
-    val_writer.add_scalar('4.mask_acc/isarom', isarom_acc, cnt_iter)
+    val_writer.add_scalar('4.mask_metric/acc_symbol', symbol_acc, cnt_iter)
+    val_writer.add_scalar('4.mask_metric/acc_degree', degree_acc, cnt_iter)
+    val_writer.add_scalar('4.mask_metric/acc_numH', numH_acc, cnt_iter)
+    val_writer.add_scalar('4.mask_metric/acc_valence', valence_acc, cnt_iter)
+    val_writer.add_scalar('4.mask_metric/acc_isarom', isarom_acc, cnt_iter)
+
+    val_writer.add_scalar('4.mask_metric/f1_symbol', f1_macro(confusion_symbol), cnt_iter)
+    val_writer.add_scalar('4.mask_metric/f1_degree', f1_macro(confusion_degree), cnt_iter)
+    val_writer.add_scalar('4.mask_metric/f1_numH', f1_macro(confusion_numH), cnt_iter)
+    val_writer.add_scalar('4.mask_metric/f1_valence', f1_macro(confusion_valence), cnt_iter)
+    val_writer.add_scalar('4.mask_metric/f1_isarom', f1_macro(confusion_isarom), cnt_iter)
 
     auxiliary_loss = None
     if args.train_logp:
@@ -525,13 +531,13 @@ if __name__ == '__main__':
 
     # ===== Logging =====#
     parser.add_argument("-li", "--log_every", type=int, default= 10 * 10)  # Test: 10  #Default 40*10
-    parser.add_argument("-vi", "--validate_every", type=int, default= 100)  # Test:50 #Default 40*50
-    parser.add_argument("-si", "--save_every", type=int, default= 2000)  # Test:50 #Default 40*100
+    parser.add_argument("-vi", "--validate_every", type=int, default= 1000)  # Test:50 #Default 40*50
+    parser.add_argument("-si", "--save_every", type=int, default= 1000)  # Test:50 #Default 40*100
 
     parser.add_argument("-mn", "--model_name", type=str, required=True)
     parser.add_argument("--log_path", type=str, default='runs')
     parser.add_argument("--ck_filename", type=str, default=None) #'model_4_256_xs_basic_000_000000300.tar')
-    parser.add_argument("--dataset_path", type=str, default='./dataset/data_xxs')
+    parser.add_argument("--dataset_path", type=str, default='./dataset/data_s')
 
     args = parser.parse_args()#["-mn", "metric_test_0.5_masking"])
 

@@ -158,3 +158,19 @@ def plot_confusion_matrix(cm, labels, classes=None, title='Confusion matrix', no
     fig.set_tight_layout(True)
 
     return fig
+
+def f1_macro(cm):
+    TP = np.diag(cm)
+    FP = np.sum(cm, axis=0) - TP
+    FN = np.sum(cm, axis=1) - TP
+    de1 = (TP+FP)
+    de1[de1 == 0] = 1
+    de2 =  (TP + FN)
+    de2[de2 == 0] = 1
+    precision = TP / de1
+    recall = TP / de2
+    de3 = (precision + recall)
+    de3[de3 == 0] = 1
+    f1 = 2 * (precision * recall) / de3
+    macro_f1 = np.mean(f1)
+    return macro_f1
