@@ -301,7 +301,6 @@ def validate(models, data_loader, args, **kwargs):
             confusion_valence += confusions[3]
             confusion_isarom += confusions[4]
 
-
             if args.train_logp or args.train_mr or args.train_tpsa:
                 _, _, molvec = models['encoder'](origin_X, A)
 
@@ -317,7 +316,6 @@ def validate(models, data_loader, args, **kwargs):
                 pred_tpsa = models['tpsa'](molvec)
                 list_tpsa_loss.append(reg_loss(pred_tpsa, tpsa).item())
                 list_tpsa_mae.append(mean_absolute_error(pred_tpsa.cpu().detach().numpy(), tpsa.cpu().detach().numpy()))
-
             temp_iter += 1
 
             # Prompting Status
@@ -328,9 +326,7 @@ def validate(models, data_loader, args, **kwargs):
                 output = output.format(epoch, batch_idx / len(data_loader) * 100.0, process_speed, temp_iter, elapsed, )
                 t = time.time()
                 logger.info(output)
-
             del batch
-
 
     val_writer.add_figure('symbol/confusion',
                          plot_confusion_matrix(
@@ -350,7 +346,6 @@ def validate(models, data_loader, args, **kwargs):
                          plot_confusion_matrix(confusion_isarom, range(args.isarom_size),
                                                title="isAromatic CM @ {}".format(cnt_iter), figsize=(2,2)),
                          cnt_iter)
-
 
     # Averaging Loss across the batch
     mask_loss = np.mean(np.array(list_mask_loss))
@@ -413,9 +408,7 @@ def validate(models, data_loader, args, **kwargs):
     output = "[VALID] E:{:3}. P:{:>2.1f}%. Mask Loss:{:>9.3}. Aux Loss:{:>9.3}. {:4.1f} mol/sec. Iter:{:6}.  Elapsed:{:6.1f} sec."
     elapsed = time.time() - t
     process_speed = (args.test_batch_size * args.log_every) / elapsed
-    output = output.format(epoch, batch_idx / len(data_loader) * 100.0, mask_loss, auxiliary_loss, process_speed, cnt_iter,
-                           elapsed, )
-    t = time.time()
+    output = output.format(epoch, batch_idx / len(data_loader) * 100.0, mask_loss, auxiliary_loss, process_speed, cnt_iter, elapsed)
     logger.info(output)
     torch.cuda.empty_cache()
 
@@ -471,8 +464,6 @@ def experiment(dataloader, args):
     mask_optimizer = NoamOpt(args.out_dim, args.lr_factor, args.lr_step, optimizers['mask'])
     auxiliary_optimizer = NoamOpt(args.out_dim, args.lr_factor, args.lr_step, optimizers['auxiliary'])
     optimizers = {'mask':mask_optimizer, 'auxiliary':auxiliary_optimizer}
-
-    # log_histogram(models, val_writer, cnt_iter)
 
     # Train Model
     validate(models, dataloader['val'], args, cnt_iter=cnt_iter, epoch=epoch)
