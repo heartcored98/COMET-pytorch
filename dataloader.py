@@ -12,14 +12,13 @@ import pandas as pd
 
 MASKING_RATE = 0
 ERASE_RATE = 0
-
+LIST_SYMBOLS = ['C', 'N', 'O', 'S', 'F', 'H', 'Si', 'P', 'Cl', 'Br',
+                'Li', 'Na', 'K', 'Mg', 'Ca', 'Fe', 'As', 'Al', 'I', 'B',
+                'V', 'Tl', 'Sb', 'Sn', 'Ag', 'Pd', 'Co', 'Se', 'Ti', 'Zn',
+                'Ge', 'Cu', 'Au', 'Ni', 'Cd', 'Mn', 'Cr', 'Pt', 'Hg', 'Pb']
 
 def atom_feature(atom):
-    return np.array(char_to_ix(atom.GetSymbol(),
-                              ['C', 'N', 'O', 'S', 'F', 'H', 'Si', 'P', 'Cl', 'Br',
-                               'Li', 'Na', 'K', 'Mg', 'Ca', 'Fe', 'As', 'Al', 'I', 'B',
-                               'V', 'Tl', 'Sb', 'Sn', 'Ag', 'Pd', 'Co', 'Se', 'Ti', 'Zn',
-                               'Ge', 'Cu', 'Au', 'Ni', 'Cd', 'Mn', 'Cr', 'Pt', 'Hg', 'Pb']) +
+    return np.array(char_to_ix(atom.GetSymbol(), LIST_SYMBOLS) +
                     char_to_ix(atom.GetDegree(), [0, 1, 2, 3, 4, 5]) +
                     char_to_ix(atom.GetTotalNumHs(), [0, 1, 2, 3, 4]) +
                     char_to_ix(atom.GetImplicitValence(), [0, 1, 2, 3, 4, 5]) +

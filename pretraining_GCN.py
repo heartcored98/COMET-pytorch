@@ -11,8 +11,7 @@ from model import *
 # ===== Compute Loss =====#
 ##########################
 
-from sklearn.metrics import accuracy_score
-from sklearn.metrics import mean_absolute_error
+from sklearn.metrics import accuracy_score, confusion_matrix, mean_absolute_error
 
 
 def compute_loss(pred_x, ground_x):
@@ -38,17 +37,42 @@ def compute_metric(pred_x, ground_x):
     num_masking = ground_x.shape[1]
     ground_x = ground_x.view(batch_size * num_masking, -1)
 
-    symbol_acc = accuracy_score(pred_x[:, :40].detach().max(dim=1)[1].cpu().numpy(),
-                                ground_x[:, 0].detach().cpu().numpy())
-    degree_acc = accuracy_score(pred_x[:, 40:46].detach().max(dim=1)[1].cpu().numpy(),
-                                ground_x[:, 1].detach().cpu().numpy())
-    numH_acc = accuracy_score(pred_x[:, 46:51].detach().max(dim=1)[1].cpu().numpy(),
-                              ground_x[:, 2].detach().cpu().numpy())
-    valence_acc = accuracy_score(pred_x[:, 51:57].detach().max(dim=1)[1].cpu().numpy(),
-                                 ground_x[:, 3].detach().cpu().numpy())
-    isarom_acc = accuracy_score(pred_x[:, 57:59].detach().max(dim=1)[1].cpu().numpy(),
-                                ground_x[:, 4].detach().cpu().numpy())
+    symbol_acc = accuracy_score(ground_x[:, 0].detach().cpu().numpy(),
+                                pred_x[:, :40].detach().max(dim=1)[1].cpu().numpy())
+    degree_acc = accuracy_score(ground_x[:, 1].detach().cpu().numpy(),
+                                pred_x[:, 40:46].detach().max(dim=1)[1].cpu().numpy())
+    numH_acc = accuracy_score(ground_x[:, 2].detach().cpu().numpy(),
+                              pred_x[:, 46:51].detach().max(dim=1)[1].cpu().numpy())
+    valence_acc = accuracy_score(ground_x[:, 3].detach().cpu().numpy(),
+                                 pred_x[:, 51:57].detach().max(dim=1)[1].cpu().numpy())
+    isarom_acc = accuracy_score(ground_x[:, 4].detach().cpu().numpy(),
+                                pred_x[:, 57:59].detach().max(dim=1)[1].cpu().numpy())
     return symbol_acc, degree_acc, numH_acc, valence_acc, isarom_acc
+
+def compute_confusion(pred_x, ground_x, args):
+    batch_size = ground_x.shape[0]
+    num_masking = ground_x.shape[1]
+    ground_x = ground_x.view(batch_size * num_masking, -1)
+
+    symbol_confusion = confusion_matrix(ground_x[:, 0].detach().cpu().numpy(),
+                                        pred_x[:, :40].detach().max(dim=1)[1].cpu().numpy(),
+                                        labels=range(args.vocab_size))
+    degree_confusion = confusion_matrix(ground_x[:, 1].detach().cpu().numpy(),
+                                        pred_x[:, 40:46].detach().max(dim=1)[1].cpu().numpy(),
+                                        labels=range(args.degree_size))
+    numH_confusion = confusion_matrix(ground_x[:, 2].detach().cpu().numpy(),
+                                      pred_x[:, 46:51].detach().max(dim=1)[1].cpu().numpy(),
+                                      labels=range(args.numH_size))
+
+    valence_confusion = confusion_matrix(ground_x[:, 3].detach().cpu().numpy(),
+                                         pred_x[:, 51:57].detach().max(dim=1)[1].cpu().numpy(),
+                                         labels=range(args.valence_size))
+
+    isarom_confusion = confusion_matrix(ground_x[:, 4].detach().cpu().numpy(),
+                                        pred_x[:, 57:59].detach().max(dim=1)[1].cpu().numpy(),
+                                        labels=range(args.isarom_size))
+
+    return symbol_confusion, degree_confusion, numH_confusion, valence_confusion, isarom_confusion
 
 #######################
 #===== Optimizer =====#
@@ -225,11 +249,11 @@ def validate(models, data_loader, args, **kwargs):
     list_tpsa_mae = []
 
     # For F1-Score Metric & Confusion Matrix
-    confusion_symbol_pred = []
-    confusion_degree_pred = []
-    confusion_numH_pred = []
-    confusion_valence_pred = []
-    confusion_isarom_pred = []
+    confusion_symbol = np.zeros((args.vocab_size, args.vocab_size))
+    confusion_degree = np.zeros((args.degree_size, args.degree_size))
+    confusion_numH = np.zeros((args.numH_size, args.numH_size))
+    confusion_valence = np.zeros((args.valence_size, args.valence_size))
+    confusion_isarom = np.zeros((args.isarom_size, args.isarom_size))
 
 
     # Initialization Model with Evaluation Mode
@@ -270,7 +294,12 @@ def validate(models, data_loader, args, **kwargs):
             list_isarom_acc.append(isarom_acc)
 
             # Accumulate Mask Task Confusion Matrix for F1-Metric
-
+            confusions = compute_confusion(pred_mask, ground_X, args)
+            confusion_symbol += confusions[0]
+            confusion_degree += confusions[1]
+            confusion_numH += confusions[2]
+            confusion_valence += confusions[3]
+            confusion_isarom += confusions[4]
 
 
             if args.train_logp or args.train_mr or args.train_tpsa:
@@ -301,6 +330,27 @@ def validate(models, data_loader, args, **kwargs):
                 logger.info(output)
 
             del batch
+
+
+    val_writer.add_figure('symbol/confusion',
+                         plot_confusion_matrix(
+                             confusion_symbol, range(args.vocab_size),
+                             classes=LIST_SYMBOLS, title="Symbol CM @ {}".format(cnt_iter), figsize=(10, 10)),
+                         cnt_iter)
+    val_writer.add_figure('degree/confusion',
+                         plot_confusion_matrix(confusion_degree, range(args.degree_size), title="Degree CM @ {}".format(cnt_iter)),
+                         cnt_iter)
+    val_writer.add_figure('numH/confusion',
+                         plot_confusion_matrix(confusion_numH, range(args.numH_size), title="NumH CM @ {}".format(cnt_iter)),
+                         cnt_iter)
+    val_writer.add_figure('valence/confusion',
+                         plot_confusion_matrix(confusion_valence, range(args.valence_size), title="Valence CM @ {}".format(cnt_iter)),
+                         cnt_iter)
+    val_writer.add_figure('isarom/confusion',
+                         plot_confusion_matrix(confusion_isarom, range(args.isarom_size),
+                                               title="isAromatic CM @ {}".format(cnt_iter), figsize=(2,2)),
+                         cnt_iter)
+
 
     # Averaging Loss across the batch
     mask_loss = np.mean(np.array(list_mask_loss))
@@ -416,9 +466,10 @@ def experiment(dataloader, args):
     auxiliary_optimizer = NoamOpt(args.out_dim, args.lr_factor, args.lr_step, optimizers['auxiliary'])
     optimizers = {'mask':mask_optimizer, 'auxiliary':auxiliary_optimizer}
 
-    log_histogram(models, val_writer, cnt_iter)
+    # log_histogram(models, val_writer, cnt_iter)
 
     # Train Model
+    validate(models, dataloader['val'], args, cnt_iter=cnt_iter, epoch=epoch)
     train(models, optimizers, dataloader, epoch, cnt_iter, args)
 
     # Logging Experiment Result
@@ -473,14 +524,14 @@ if __name__ == '__main__':
     parser.add_argument("-nw", "--num_workers", type=int, default=12)
 
     # ===== Logging =====#
-    parser.add_argument("-li", "--log_every", type=int, default=10 * 10)  # Test: 10  #Default 40*10
-    parser.add_argument("-vi", "--validate_every", type=int, default= 4000)  # Test:50 #Default 40*50
-    parser.add_argument("-si", "--save_every", type=int, default= 4000)  # Test:50 #Default 40*100
+    parser.add_argument("-li", "--log_every", type=int, default= 10 * 10)  # Test: 10  #Default 40*10
+    parser.add_argument("-vi", "--validate_every", type=int, default= 100)  # Test:50 #Default 40*50
+    parser.add_argument("-si", "--save_every", type=int, default= 2000)  # Test:50 #Default 40*100
 
     parser.add_argument("-mn", "--model_name", type=str, required=True)
     parser.add_argument("--log_path", type=str, default='runs')
     parser.add_argument("--ck_filename", type=str, default=None) #'model_4_256_xs_basic_000_000000300.tar')
-    parser.add_argument("--dataset_path", type=str, default='./dataset/data_xs')
+    parser.add_argument("--dataset_path", type=str, default='./dataset/data_xxs')
 
     args = parser.parse_args()#["-mn", "metric_test_0.5_masking"])
 

@@ -4,6 +4,10 @@ import os
 from os.path import isfile, join
 import logging
 import torch
+import numpy as np
+import itertools
+import matplotlib.pyplot as plt
+
 
 def make_model_comment(args):
     model_explain = "Time : {} \n".format(datetime.datetime.now().strftime('%y-%m-%d_%H:%M:%S'))
@@ -115,3 +119,42 @@ def log_histogram(models, writer, cnt_iter):
         for name, param in models['tpsa'].named_parameters():
             name = 'tpsa/' + name
             writer.add_histogram(name, param.clone().cpu().data.numpy(), cnt_iter)
+
+
+def plot_confusion_matrix(cm, labels, classes=None, title='Confusion matrix', normalize=True, figsize=(3,3)):
+
+    if normalize:
+        de = cm.sum(axis=1)[:, np.newaxis]
+        de[de == 0] =1
+        cm = cm.astype('float') / de
+
+    np.set_printoptions(precision=2)
+
+    fig = plt.Figure(figsize=figsize, dpi=300, facecolor='w', edgecolor='k')
+    ax = fig.add_subplot(1, 1, 1)
+    im = ax.imshow(cm, cmap='Oranges')
+
+    if classes:
+        labels = classes
+    tick_marks = np.arange(len(labels))
+
+    ax.set_xlabel('Predicted', fontsize=7)
+    ax.set_xticks(tick_marks)
+    ax.set_xticklabels(labels, fontsize=6, rotation=0,  ha='center')
+    ax.xaxis.set_label_position('bottom')
+    ax.xaxis.tick_bottom()
+
+    ax.set_ylabel('True Label', fontsize=7)
+    ax.set_yticks(tick_marks)
+    ax.set_yticklabels(labels, fontsize=6, va ='center')
+    ax.yaxis.set_label_position('left')
+    ax.yaxis.tick_left()
+    ax.set_title(title, fontdict={'fontsize': 6})
+
+
+    fmt = '.2f' if normalize else 'd'
+    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+        ax.text(j, i, format(cm[i, j], fmt) if cm[i,j]!=0 else '.', horizontalalignment="center", fontsize=6, verticalalignment='center', color= "black")
+    fig.set_tight_layout(True)
+
+    return fig
