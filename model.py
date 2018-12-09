@@ -34,7 +34,6 @@ class Attention(nn.Module):
     def forward(self, X, A):
         list_X_head = list()
         for i in range(self.num_attn_heads):
-            print("in attention {}th head".format(i), X.shape, A.shape)
             X_projected = self.projection[i](X)
             attn_matrix = self.attn_coeff(X_projected, A, self.coef_matrix[i])
             X_head = torch.matmul(attn_matrix, X_projected)
@@ -160,9 +159,9 @@ class Encoder(nn.Module):
         super(Encoder, self).__init__()
         self.bs = args.batch_size
         self.molvec_dim = args.molvec_dim
-        self.embedding = self.create_emb_layer([args.vocab_size,args.degree_size,
-                                                args.numH_size, args.isarom_size,
-                                                args.valence_size],  args.emb_train)
+        self.embedding = self.create_emb_layer([args.vocab_size, args.degree_size,
+                                                args.numH_size, args.valence_size,
+                                                args.isarom_size],  args.emb_train)
         self.out_dim = args.out_dim
 
         # Graph Convolution Layers with Readout Layer
@@ -198,7 +197,6 @@ class Encoder(nn.Module):
     def encoder(self, input_X, A):
         x = self._embed(input_X)
         for i, module in enumerate(self.gconvs):
-            print("{}th layer".format(i))
             x, A = module(x, A)
         molvec = self.readout(x)
         return x, A, molvec
@@ -208,12 +206,12 @@ class Encoder(nn.Module):
         for i in range(5):
             list_embed.append(self.embedding[i](x[:, :, i]))
         x = torch.cat(list_embed, 2)
-        print('embed', x.shape)
         return x
 
     def create_emb_layer(self, list_vocab_size, emb_train=False):
         list_emb_layer = nn.ModuleList()
-        for vocab_size in list_vocab_size:
+        for i, vocab_size in enumerate(list_vocab_size):
+            vocab_size += 1
             emb_layer = nn.Embedding(vocab_size, vocab_size)
             weight_matrix = torch.zeros((vocab_size, vocab_size))
             for i in range(vocab_size):
@@ -230,16 +228,15 @@ class Encoder(nn.Module):
 
 
 class Classifier(nn.Module):
-    def __init__(self, in_dim, out_dim, molvec_dim, vocab_size, dropout_rate=0.1, act=ACT2FN['relu']):
+    def __init__(self, out_dim, molvec_dim, classifier_dim, dropout_rate=0.1, act=ACT2FN['relu']):
         super(Classifier, self).__init__()
-        self.in_dim = in_dim
         self.out_dim = out_dim
         self.molvec_dim = molvec_dim
-        self.vs = vocab_size
+        self.classifier_dim = classifier_dim
 
-        self.fc1 = nn.Linear(self.molvec_dim + self.out_dim, self.in_dim)
-        self.fc2 = nn.Linear(self.in_dim, self.in_dim)
-        self.bn1 = BN1d(self.in_dim)
+        self.fc1 = nn.Linear(self.molvec_dim + self.out_dim, self.classifier_dim)
+        self.fc2 = nn.Linear(self.classifier_dim, self.classifier_dim)
+        self.bn1 = BN1d(self.classifier_dim)
         self.act = act
         self.dropout = nn.Dropout(p=dropout_rate)
         self.param_initializer()

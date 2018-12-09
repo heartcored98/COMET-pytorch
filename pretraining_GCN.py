@@ -15,35 +15,39 @@ from sklearn.metrics import accuracy_score
 from sklearn.metrics import mean_absolute_error
 
 
-def compute_loss(pred_x, ground_x, vocab_size):
+def compute_loss(pred_x, ground_x):
     batch_size = ground_x.shape[0]
     num_masking = ground_x.shape[1]
     ground_x = ground_x.view(batch_size * num_masking, -1)
 
-    symbol_loss = F.cross_entropy(pred_x[:, :vocab_size], ground_x[:, 0].detach())
-    degree_loss = F.cross_entropy(pred_x[:, vocab_size:vocab_size + 6], ground_x[:, 1:7].detach().max(dim=1)[1])
-    numH_loss = F.cross_entropy(pred_x[:, vocab_size + 6:vocab_size + 11], ground_x[:, 7:12].detach().max(dim=1)[1])
-    valence_loss = F.cross_entropy(pred_x[:, vocab_size + 11:vocab_size + 17],
-                                   ground_x[:, 12:18].detach().max(dim=1)[1])
-    isarom_loss = F.binary_cross_entropy(torch.sigmoid(pred_x[:, -1]), ground_x[:, -1].detach().float())
-    return symbol_loss, degree_loss, numH_loss, valence_loss, isarom_loss  # total_loss
+    ground_x -= 1 #remove [mask] token which occupied index 0
+    ground_x[ground_x < 0] = 0
+    decoy_loss = F.cross_entropy(torch.Tensor([[0.7, 0.4], [0.2, 0.6]]), torch.Tensor([0, 1]).long())
+    symbol_loss = F.cross_entropy(pred_x[:, :40], ground_x[:, 0].detach())
+    # print(torch.min(pred_x[:, 40:46].detach().max(dim=1)[1].cpu()), torch.max(pred_x[:, 40:46].detach().max(dim=1)[1].cpu()), torch.min(ground_x[:, 1].detach()), torch.max(ground_x[:, 1].detach()))
+
+    degree_loss = F.cross_entropy(pred_x[:, 40:46], ground_x[:, 1].detach())
+    numH_loss = F.cross_entropy(pred_x[:, 46:51], ground_x[:, 2].detach())
+    valence_loss = F.cross_entropy(pred_x[:, 51:57], ground_x[:, 3].detach())
+    isarom_loss = F.cross_entropy(pred_x[:, 57:59], ground_x[:, 4].detach())
+    return symbol_loss, degree_loss, numH_loss, valence_loss, isarom_loss
 
 
-def compute_metric(pred_x, ground_x, vocab_size):
+def compute_metric(pred_x, ground_x):
     batch_size = ground_x.shape[0]
     num_masking = ground_x.shape[1]
     ground_x = ground_x.view(batch_size * num_masking, -1)
 
-    symbol_acc = accuracy_score(pred_x[:, :vocab_size].detach().max(dim=1)[1].cpu().numpy(),
+    symbol_acc = accuracy_score(pred_x[:, :40].detach().max(dim=1)[1].cpu().numpy(),
                                 ground_x[:, 0].detach().cpu().numpy())
-    degree_acc = accuracy_score(pred_x[:, vocab_size:vocab_size + 6].detach().max(dim=1)[1].cpu().numpy(),
-                                ground_x[:, 1:7].detach().max(dim=1)[1].cpu().numpy())
-    numH_acc = accuracy_score(pred_x[:, vocab_size + 6:vocab_size + 11].detach().max(dim=1)[1].cpu().numpy(),
-                              ground_x[:, 7:12].detach().max(dim=1)[1].cpu().numpy())
-    valence_acc = accuracy_score(pred_x[:, vocab_size + 11:vocab_size + 17].detach().max(dim=1)[1].cpu().numpy(),
-                                 ground_x[:, 12:18].detach().max(dim=1)[1].cpu().numpy())
-    isarom_acc = accuracy_score((torch.sigmoid(pred_x[:, -1]) + 1).floor_().cpu().numpy(),
-                                ground_x[:, -1].detach().cpu().numpy())
+    degree_acc = accuracy_score(pred_x[:, 40:46].detach().max(dim=1)[1].cpu().numpy(),
+                                ground_x[:, 1].detach().cpu().numpy())
+    numH_acc = accuracy_score(pred_x[:, 46:51].detach().max(dim=1)[1].cpu().numpy(),
+                              ground_x[:, 2].detach().cpu().numpy())
+    valence_acc = accuracy_score(pred_x[:, 51:57].detach().max(dim=1)[1].cpu().numpy(),
+                                 ground_x[:, 3].detach().cpu().numpy())
+    isarom_acc = accuracy_score(pred_x[:, 57:59].detach().max(dim=1)[1].cpu().numpy(),
+                                ground_x[:, 4].detach().cpu().numpy())
     return symbol_acc, degree_acc, numH_acc, valence_acc, isarom_acc
 
 #######################
@@ -115,9 +119,8 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
             pred_mask = models['classifier'](encoded_X, molvec, idx_M)
 
             # Compute Mask Task Loss
-            symbol_loss, degree_loss, numH_loss, valence_loss, isarom_loss = compute_loss(pred_mask, ground_X, args.vocab_size)
+            symbol_loss, degree_loss, numH_loss, valence_loss, isarom_loss = compute_loss(pred_mask, ground_X)
             mask_loss = symbol_loss + degree_loss + numH_loss + valence_loss + isarom_loss
-
             train_writer.add_scalar('2.mask/symbol', symbol_loss, cnt_iter)
             train_writer.add_scalar('2.mask/degree', degree_loss, cnt_iter)
             train_writer.add_scalar('2.mask/numH', numH_loss, cnt_iter)
@@ -132,28 +135,28 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
             torch.cuda.empty_cache()
 
             # Encoding Original Molecule
-            auxiliary_loss = torch.Tensor(0)
-            if args.train_logP or args.train_mr or args.train_tpsa:
-                _, _, molvec = models['encoder'][origin_X, A]
+            auxiliary_loss = None
+            if args.train_logp or args.train_mr or args.train_tpsa:
+                _, _, molvec = models['encoder'](origin_X, A)
 
             # Compute Loss of Original Molecule Property
             if args.train_logp:
                 pred_logp = models['logP'](molvec)
                 logP_loss = reg_loss(pred_logp, logp)
-                auxiliary_loss += logP_loss
+                auxiliary_loss = logP_loss
                 train_writer.add_scalar('3.auxiliary/logP', logP_loss, cnt_iter)
             if args.train_mr:
                 pred_mr = models['mr'](molvec)
                 mr_loss = reg_loss(pred_mr, mr)
-                auxiliary_loss += mr_loss
+                auxiliary_loss = auxiliary_loss + mr_loss if auxiliary_loss else mr_loss
                 train_writer.add_scalar('3.auxiliary/mr', mr_loss, cnt_iter)
             if args.train_tpsa:
                 pred_tpsa = models['tpsa'](molvec)
                 tpsa_loss = reg_loss(pred_tpsa, tpsa)
-                auxiliary_loss += tpsa_loss
+                auxiliary_loss = auxiliary_loss + tpsa_loss if auxiliary_loss else tpsa_loss
                 train_writer.add_scalar('3.auxiliary/tpsa', tpsa_loss, cnt_iter)
 
-            if args.train_logP or args.train_mr or args.train_tpsa:
+            if args.train_logp or args.train_mr or args.train_tpsa:
                 train_writer.add_scalar('1.status/auxiliary', auxiliary_loss, cnt_iter)
                 auxiliary_loss.backward()
                 optimizer['auxiliary'].step(cnt_iter)
@@ -174,7 +177,8 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
 
             # Validate Model
             if cnt_iter % args.validate_every == 0:
-                optimizer.zero_grad()
+                optimizer['mask'].zero_grad()
+                optimizer['auxiliary'].zero_grad()
                 validate(models, dataloader['val'], args, cnt_iter=cnt_iter, epoch=epoch)
                 t = time.time()
 
@@ -248,8 +252,8 @@ def validate(models, data_loader, args, **kwargs):
             pred_mask = models['classifier'](encoded_X, molvec, idx_M)
 
             # Compute Mask Task Loss & Property Regression Loss
-            symbol_loss, degree_loss, numH_loss, valence_loss, isarom_loss = compute_loss(pred_mask, ground_X,
-                                                                                          args.vocab_size)
+            symbol_loss, degree_loss, numH_loss, valence_loss, isarom_loss = compute_loss(pred_mask, ground_X)
+
             list_symbol_loss.append(symbol_loss.item())
             list_degree_loss.append(degree_loss.item())
             list_numH_loss.append(numH_loss.item())
@@ -258,8 +262,7 @@ def validate(models, data_loader, args, **kwargs):
             list_mask_loss.append((symbol_loss + degree_loss + numH_loss + valence_loss + isarom_loss).item())
 
             # Compute Mask Task Accuracy & Property Regression MAE
-            symbol_acc, degree_acc, numH_acc, valence_acc, isarom_acc = compute_metric(pred_mask, ground_X,
-                                                                                       args.vocab_size)
+            symbol_acc, degree_acc, numH_acc, valence_acc, isarom_acc = compute_metric(pred_mask, ground_X)
             list_symbol_acc.append(symbol_acc)
             list_degree_acc.append(degree_acc)
             list_numH_acc.append(numH_acc)
@@ -270,8 +273,8 @@ def validate(models, data_loader, args, **kwargs):
 
 
 
-            if args.train_logP or args.train_mr or args.train_tpsa:
-                _, _, molvec = models['encoder'][origin_X, A]
+            if args.train_logp or args.train_mr or args.train_tpsa:
+                _, _, molvec = models['encoder'](origin_X, A)
 
             if args.train_logp:
                 pred_logp = models['logP'](molvec)
@@ -325,33 +328,33 @@ def validate(models, data_loader, args, **kwargs):
     val_writer.add_scalar('4.mask_acc/valence', valence_acc, cnt_iter)
     val_writer.add_scalar('4.mask_acc/isarom', isarom_acc, cnt_iter)
 
-    auxiliary_loss = torch.Tensor(0)
+    auxiliary_loss = None
     if args.train_logp:
         logP_loss = np.mean(np.array(list_logP_loss))
         logP_mae = np.mean(np.array(list_logP_mae))
-        auxiliary_loss += logP_loss
+        auxiliary_loss = logP_loss
         val_writer.add_scalar('3.auxiliary/logP', logP_loss, cnt_iter)
         val_writer.add_scalar('5.auxiliary_mae/logP', logP_mae, cnt_iter)
     if args.train_mr:
         mr_loss = np.mean(np.array(list_mr_loss))
         mr_mae = np.mean(np.array(list_mr_mae))
-        auxiliary_loss += mr_loss
+        auxiliary_loss = auxiliary_loss + mr_loss if auxiliary_loss else mr_loss
         val_writer.add_scalar('3.auxiliary/mr', mr_loss, cnt_iter)
         val_writer.add_scalar('5.auxiliary_mae/mr', mr_mae, cnt_iter)
     if args.train_tpsa:
         tpsa_loss = np.mean(np.array(list_tpsa_loss))
         tpsa_mae = np.mean(np.array(list_mr_mae))
-        auxiliary_loss += tpsa_loss
+        auxiliary_loss = auxiliary_loss + tpsa_loss if auxiliary_loss else tpsa_loss
         val_writer.add_scalar('3.auxiliary/tpsa', tpsa_loss, cnt_iter)
         val_writer.add_scalar('5.auxiliary_mae/tpsa', tpsa_mae, cnt_iter)
-
-    val_writer.add_scalar('1.status/auxiliary', auxiliary_loss, cnt_iter)
+    if args.train_logp or args.train_mr or args.train_tpsa:
+        val_writer.add_scalar('1.status/auxiliary', auxiliary_loss, cnt_iter)
     val_writer.add_scalar('1.status/mask', mask_loss, cnt_iter)
 
     # Log model weight historgram
     log_histogram(models, val_writer, cnt_iter)
 
-    output = "[V] E:{:3}. P:{:>2.1f}%. Mask Loss:{:>9.3}. Aux Loss:{:>9.3}. {:4.1f} mol/sec. Iter:{:6}.  Elapsed:{:6.1f} sec."
+    output = "[VALID] E:{:3}. P:{:>2.1f}%. Mask Loss:{:>9.3}. Aux Loss:{:>9.3}. {:4.1f} mol/sec. Iter:{:6}.  Elapsed:{:6.1f} sec."
     elapsed = time.time() - t
     process_speed = (args.test_batch_size * args.log_every) / elapsed
     output = output.format(epoch, batch_idx / len(data_loader) * 100.0, mask_loss, auxiliary_loss, process_speed, cnt_iter,
@@ -366,7 +369,7 @@ def experiment(dataloader, args):
     
     # Construct Model
     encoder = Encoder(args)
-    classifier = Classifier(args.in_dim, args.out_dim, args.molvec_dim, args.classifier_dim, args.dp_rate, ACT2FN[args.act])
+    classifier = Classifier(args.out_dim, args.molvec_dim, args.classifier_dim, args.dp_rate, ACT2FN[args.act])
     models = {'encoder': encoder, 'classifier': classifier}
     if args.train_logp:
         models.update({'logP': Regressor(args.molvec_dim, args.dp_rate, ACT2FN[args.act])})
@@ -406,11 +409,11 @@ def experiment(dataloader, args):
     epoch = 0
     cnt_iter = 0
     if args.ck_filename:
-        epoch, cnt_iter, models, optimizer = load_checkpoint(models, optimizers, args.ck_filename, args)
+        epoch, cnt_iter, models, optimizers = load_checkpoint(models, optimizers, args.ck_filename, args)
         logger.info('Loaded Model from {}'.format(args.ck_filename))
     
-    mask_optimizer = NoamOpt(args.out_dim, args.lr_factor, args.lr_step, mask_optimizer)
-    auxiliary_optimizer = NoamOpt(args.out_dim, args.lr_factor, args.lr_step, auxiliary_optimizer)
+    mask_optimizer = NoamOpt(args.out_dim, args.lr_factor, args.lr_step, optimizers['mask'])
+    auxiliary_optimizer = NoamOpt(args.out_dim, args.lr_factor, args.lr_step, optimizers['auxiliary'])
     optimizers = {'mask':mask_optimizer, 'auxiliary':auxiliary_optimizer}
 
     log_histogram(models, val_writer, cnt_iter)
@@ -430,11 +433,11 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Add logP, TPSA, MR, PBF value on .smi files')
     # ===== Model Definition =====#
-    parser.add_argument("--vocab_size", type=int, default=41)
-    parser.add_argument("--degree_size", type=int, default=7)
-    parser.add_argument("--numH_size", type=int, default=6)
-    parser.add_argument("--valence_size", type=int, default=7)
-    parser.add_argument("--isarom_size", type=int, default=3)
+    parser.add_argument("--vocab_size", type=int, default=40)
+    parser.add_argument("--degree_size", type=int, default=6)
+    parser.add_argument("--numH_size", type=int, default=5)
+    parser.add_argument("--valence_size", type=int, default=6)
+    parser.add_argument("--isarom_size", type=int, default=2)
 
     parser.add_argument("--in_dim", type=int, default=64)
     parser.add_argument("--classifier_dim", type=int, default=59)
@@ -467,17 +470,17 @@ if __name__ == '__main__':
     parser.add_argument("-ep", "--epoch", type=int, default=100)
     parser.add_argument("-bs", "--batch_size", type=int, default=512)
     parser.add_argument("-tbs", "--test_batch_size", type=int, default=512)
-    parser.add_argument("-nw", "--num_workers", type=int, default=8)
+    parser.add_argument("-nw", "--num_workers", type=int, default=12)
 
     # ===== Logging =====#
     parser.add_argument("-li", "--log_every", type=int, default=10 * 10)  # Test: 10  #Default 40*10
-    parser.add_argument("-vi", "--validate_every", type=int, default=100)  # Test:50 #Default 40*50
-    parser.add_argument("-si", "--save_every", type=int, default=40 * 100)  # Test:50 #Default 40*100
+    parser.add_argument("-vi", "--validate_every", type=int, default= 4000)  # Test:50 #Default 40*50
+    parser.add_argument("-si", "--save_every", type=int, default= 4000)  # Test:50 #Default 40*100
 
     parser.add_argument("-mn", "--model_name", type=str, required=True)
     parser.add_argument("--log_path", type=str, default='runs')
-    parser.add_argument("--ck_filename", type=str, default=None)  # 'model_ck_000_000000100.tar')
-    parser.add_argument("--dataset_path", type=str, default='./dataset/data_xxs')
+    parser.add_argument("--ck_filename", type=str, default=None) #'model_4_256_xs_basic_000_000000300.tar')
+    parser.add_argument("--dataset_path", type=str, default='./dataset/data_xs')
 
     args = parser.parse_args()#["-mn", "metric_test_0.5_masking"])
 

@@ -45,15 +45,17 @@ def get_logger(log_path, filename='train.log', logger_name=None):
     return logger
 
 
-def save_checkpoint(epoch, cnt_iter, models, optimizer, args):
+def save_checkpoint(epoch, cnt_iter, models, optimizers, args):
     checkpoint = {
         'epoch': epoch,
         'cnt_iter': cnt_iter,
-        'optimizer': optimizer.state_dict(),
         'args': args
     }
     for model_name, model in models.items():
         checkpoint.update({model_name: model.state_dict()})
+
+    for optimizer_name, optimizer in optimizers.items():
+        checkpoint.update({optimizer_name: optimizer.state_dict()})
 
     log_path = join(args.log_path, args.model_name + '_train')
     filename = '{}_{:03}_{:09}.tar'.format(args.model_name, epoch, cnt_iter)
@@ -62,15 +64,18 @@ def save_checkpoint(epoch, cnt_iter, models, optimizer, args):
     return filename
 
 
-def load_checkpoint(models, optimizer, filename, args):
+def load_checkpoint(models, optimizers, filename, args):
     log_path = join(args.log_path, args.model_name + '_train')
     checkpoint = torch.load(join(log_path, filename))
 
     for model_name, model in models.items():
         model.load_state_dict(checkpoint[model_name])
-    optimizer.load_state_dict(checkpoint['optimizer'])
 
-    return checkpoint['epoch'], checkpoint['cnt_iter'], models, optimizer
+
+    for optimizer_name, optimizer in optimizers.items():
+        optimizer.load_state_dict(checkpoint[optimizer_name])
+
+    return checkpoint['epoch'], checkpoint['cnt_iter'], models, optimizers
 
 
 def log_histogram(models, writer, cnt_iter):

@@ -23,7 +23,7 @@ def atom_feature(atom):
                     char_to_ix(atom.GetDegree(), [0, 1, 2, 3, 4, 5]) +
                     char_to_ix(atom.GetTotalNumHs(), [0, 1, 2, 3, 4]) +
                     char_to_ix(atom.GetImplicitValence(), [0, 1, 2, 3, 4, 5]) +
-                    [atom.GetIsAromatic()])    # (40, 6, 5, 6, 1)
+                    char_to_ix(int(atom.GetIsAromatic()), [0, 1]))    # (40, 6, 5, 6, 2)
 
 def char_to_ix(x, allowable_set):
     if x not in allowable_set:
@@ -83,7 +83,7 @@ def masking_feature(feature, num_masking, erase_rate):
             masked_feature[i, 1] = 0
         elif prob_masking[1] > 1- ((1-ERASE_RATE) * 0.5):
             masked_feature[i, 1] = np.random.randint(1, 7)
-        
+
         # Masking Num Hs
         if prob_masking[2] < ERASE_RATE:
             masked_feature[i, 2] = 0
