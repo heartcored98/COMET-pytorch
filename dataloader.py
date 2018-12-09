@@ -17,12 +17,26 @@ LIST_SYMBOLS = ['C', 'N', 'O', 'S', 'F', 'H', 'Si', 'P', 'Cl', 'Br',
                 'V', 'Tl', 'Sb', 'Sn', 'Ag', 'Pd', 'Co', 'Se', 'Ti', 'Zn',
                 'Ge', 'Cu', 'Au', 'Ni', 'Cd', 'Mn', 'Cr', 'Pt', 'Hg', 'Pb']
 
+LIST_PROB = [2.3993241881917855e-05, 8.444776409026159e-09, 5.054594488705504e-08, 6.021403652679174e-08,
+             4.649727426452611e-07, 3.068536033477748e-07, 0.034482758620689655, 0.0005595207228372417,
+             0.0006275408891429457, 9.129742249043719e-07, 1.9841406396876806e-06, 0.034482758620689655,
+             0.034482758620689655, 0.034482758620689655, 0.034482758620689655, 0.034482758620689655,
+             0.034482758620689655, 0.034482758620689655, 0.034482758620689655, 2.2842470449140126e-05,
+             0.0012404878041197762, 0.034482758620689655, 0.034482758620689655, 0.034482758620689655,
+             0.03200458534629023, 0.034482758620689655, 0.034482758620689655, 0.034482758620689655,
+             0.034482758620689655, 0.034482758620689655, 0.034482758620689655, 0.034482758620689655,
+             0.034482758620689655, 0.034482758620689655, 0.034482758620689655, 0.034482758620689655,
+             0.034482758620689655, 0.034482758620689655, 0.034482758620689655, 0.034482758620689655,
+             0.034482758620689655]
+
+
 def atom_feature(atom):
     return np.array(char_to_ix(atom.GetSymbol(), LIST_SYMBOLS) +
                     char_to_ix(atom.GetDegree(), [0, 1, 2, 3, 4, 5]) +
                     char_to_ix(atom.GetTotalNumHs(), [0, 1, 2, 3, 4]) +
                     char_to_ix(atom.GetImplicitValence(), [0, 1, 2, 3, 4, 5]) +
                     char_to_ix(int(atom.GetIsAromatic()), [0, 1]))    # (40, 6, 5, 6, 2)
+
 
 def char_to_ix(x, allowable_set):
     if x not in allowable_set:
@@ -52,7 +66,7 @@ def normalize_adj(mx):
     return r_inv.dot(mx).dot(r_inv)
 
 
-def masking_feature(feature, num_masking, erase_rate):
+def masking_feature(feature, num_masking, erase_rate, list_prob):
     """ Given feature, select 'num_masking' node feature and perturbate them.
     
         [5 features : Atom symbol, degree, num Hs, valence, isAromatic]  
@@ -66,7 +80,7 @@ def masking_feature(feature, num_masking, erase_rate):
     """
     ERASE_RATE = erase_rate
     
-    masking_indices = np.random.choice(len(feature), num_masking, replace=False)
+    masking_indices = np.random.choice(len(feature), num_masking, replace=False, p=list_prob / np.sum(list_prob))
     ground_truth = np.copy(feature[masking_indices, :])
     masked_feature = np.copy(feature)
     for i in masking_indices:
@@ -122,14 +136,14 @@ def postprocess_batch(mini_batch):
     batch_masking = np.zeros((batch_length, num_masking), dtype=int)
     
     for i, row in enumerate(mini_batch):
-        mol_length, original_feature, adj = int(row[0]), row[1], row[2]
-        masked_feature, ground_truth, masking_indices  = masking_feature(original_feature, num_masking, erase_rate)
+        mol_length, original_feature, adj, list_prob = int(row[0]), row[1], row[2], row[3]
+        masked_feature, ground_truth, masking_indices  = masking_feature(original_feature, num_masking, erase_rate, list_prob)
         batch_masked_feature[i, :mol_length, :] = masked_feature
         batch_original_feature[i, :mol_length, :] = original_feature
         batch_ground[i, :, :] = ground_truth
         batch_masking[i, :] = masking_indices
-        batch_adj[i, :mol_length, :mol_length] = normalize_adj(adj+np.eye(len(adj)))
-        batch_property[i, :] = [row[3], row[4], row[5]]
+        batch_adj[i, :mol_length, :mol_length] = adj #normalize_adj(adj+np.eye(len(adj)))
+        batch_property[i, :] = [row[4], row[5], row[6]]
         
     return batch_original_feature, batch_masked_feature, batch_adj, batch_property, batch_ground, batch_masking
 
@@ -191,11 +205,18 @@ class zincDataset(Dataset):
 
         mol = Chem.MolFromSmiles(smile)
         adj = Chem.rdmolops.GetAdjacencyMatrix(mol)
-        list_feature = list()
-        for atom in mol.GetAtoms():
-            list_feature.append(atom_feature(atom))
 
-        return row['length'], np.array(list_feature), adj, row['logP'], row['mr'], row['tpsa']
+        adj = normalize_adj(adj + np.eye(len(adj)))
+
+        num_mol = len(mol.GetAtoms())
+        list_feature = np.zeros((num_mol, 5))
+        list_prob = np.zeros(num_mol)
+        for i, atom in enumerate(mol.GetAtoms()):
+            feature = atom_feature(atom)
+            list_feature[i] = feature
+            list_prob[i] = LIST_PROB[feature[0]]
+
+        return row['length'], list_feature, adj, list_prob, row['logP'], row['mr'], row['tpsa']
 
     def get_sizes(self):
         return self.data['length']
