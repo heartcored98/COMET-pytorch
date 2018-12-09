@@ -2,6 +2,7 @@ import time
 import argparse
 
 from tensorboardX import SummaryWriter
+from sklearn.metrics import accuracy_score, confusion_matrix, mean_absolute_error
 
 from dataloader import *
 from utils import *
@@ -11,7 +12,6 @@ from model import *
 # ===== Compute Loss =====#
 ##########################
 
-from sklearn.metrics import accuracy_score, confusion_matrix, mean_absolute_error
 
 
 def compute_loss(pred_x, ground_x):
@@ -21,9 +21,7 @@ def compute_loss(pred_x, ground_x):
 
     ground_x -= 1 #remove [mask] token which occupied index 0
     ground_x[ground_x < 0] = 0
-    decoy_loss = F.cross_entropy(torch.Tensor([[0.7, 0.4], [0.2, 0.6]]), torch.Tensor([0, 1]).long())
     symbol_loss = F.cross_entropy(pred_x[:, :40], ground_x[:, 0].detach())
-    # print(torch.min(pred_x[:, 40:46].detach().max(dim=1)[1].cpu()), torch.max(pred_x[:, 40:46].detach().max(dim=1)[1].cpu()), torch.min(ground_x[:, 1].detach()), torch.max(ground_x[:, 1].detach()))
 
     degree_loss = F.cross_entropy(pred_x[:, 40:46], ground_x[:, 1].detach())
     numH_loss = F.cross_entropy(pred_x[:, 46:51], ground_x[:, 2].detach())
@@ -36,7 +34,6 @@ def compute_metric(pred_x, ground_x):
     batch_size = ground_x.shape[0]
     num_masking = ground_x.shape[1]
     ground_x = ground_x.view(batch_size * num_masking, -1)
-
     symbol_acc = accuracy_score(ground_x[:, 0].detach().cpu().numpy(),
                                 pred_x[:, :40].detach().max(dim=1)[1].cpu().numpy())
     degree_acc = accuracy_score(ground_x[:, 1].detach().cpu().numpy(),
@@ -48,6 +45,7 @@ def compute_metric(pred_x, ground_x):
     isarom_acc = accuracy_score(ground_x[:, 4].detach().cpu().numpy(),
                                 pred_x[:, 57:59].detach().max(dim=1)[1].cpu().numpy())
     return symbol_acc, degree_acc, numH_acc, valence_acc, isarom_acc
+
 
 def compute_confusion(pred_x, ground_x, args):
     batch_size = ground_x.shape[0]
@@ -74,9 +72,11 @@ def compute_confusion(pred_x, ground_x, args):
 
     return symbol_confusion, degree_confusion, numH_confusion, valence_confusion, isarom_confusion
 
+
 #######################
 #===== Optimizer =====#
 #######################
+
 
 class NoamOpt:
     "Optim wrapper that implements rate."
@@ -110,6 +110,7 @@ class NoamOpt:
 #===== Training   =====#
 ########################
 
+
 def train(models, optimizer, dataloader, epoch, cnt_iter, args):
     t = time.time()
     list_train_loss = list()
@@ -126,7 +127,6 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
 
             optimizer['mask'].zero_grad()
             optimizer['auxiliary'].zero_grad()
-
 
             # Get Batch Sample from DataLoader
             origin_X, masked_X, A, mol_prop, ground_X, idx_M = batch
@@ -210,10 +210,10 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
             if cnt_iter % args.save_every == 0:
                 filename = save_checkpoint(epoch, cnt_iter, models, optimizer, args)
                 logger.info('Saved Model as {}'.format(filename))
-
             del batch
                 
     logger.info('Training Completed')
+
 
 
 ######################################
