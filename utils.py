@@ -169,5 +169,5 @@ def f1_macro(cm):
     de3 = (precision + recall)
     de3[de3 == 0] = 1
     f1 = 2 * (precision * recall) / de3
-    macro_f1 = np.mean(f1)
+    macro_f1 = np.mean(np.trim_zeros(f1))
     return macro_f1

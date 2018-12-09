@@ -145,12 +145,7 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
             # Compute Mask Task Loss
             symbol_loss, degree_loss, numH_loss, valence_loss, isarom_loss = compute_loss(pred_mask, ground_X)
             mask_loss = symbol_loss + degree_loss + numH_loss + valence_loss + isarom_loss
-            train_writer.add_scalar('2.mask/symbol', symbol_loss, cnt_iter)
-            train_writer.add_scalar('2.mask/degree', degree_loss, cnt_iter)
-            train_writer.add_scalar('2.mask/numH', numH_loss, cnt_iter)
-            train_writer.add_scalar('2.mask/valence', valence_loss, cnt_iter)
-            train_writer.add_scalar('2.mask/isarom', isarom_loss, cnt_iter)
-            train_writer.add_scalar('1.status/mask', mask_loss, cnt_iter)
+
 
             # Backprogating and Updating Parameter
             mask_loss.backward()
@@ -168,17 +163,14 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
                 pred_logp = models['logP'](molvec)
                 logP_loss = reg_loss(pred_logp, logp)
                 auxiliary_loss = logP_loss
-                train_writer.add_scalar('3.auxiliary/logP', logP_loss, cnt_iter)
             if args.train_mr:
                 pred_mr = models['mr'](molvec)
                 mr_loss = reg_loss(pred_mr, mr)
                 auxiliary_loss = auxiliary_loss + mr_loss if auxiliary_loss else mr_loss
-                train_writer.add_scalar('3.auxiliary/mr', mr_loss, cnt_iter)
             if args.train_tpsa:
                 pred_tpsa = models['tpsa'](molvec)
                 tpsa_loss = reg_loss(pred_tpsa, tpsa)
                 auxiliary_loss = auxiliary_loss + tpsa_loss if auxiliary_loss else tpsa_loss
-                train_writer.add_scalar('3.auxiliary/tpsa', tpsa_loss, cnt_iter)
 
             if args.train_logp or args.train_mr or args.train_tpsa:
                 train_writer.add_scalar('1.status/auxiliary', auxiliary_loss, cnt_iter)
@@ -192,6 +184,20 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
 
             # Prompting Status
             if cnt_iter % args.log_every == 0:
+                train_writer.add_scalar('2.mask/symbol', symbol_loss, cnt_iter)
+                train_writer.add_scalar('2.mask/degree', degree_loss, cnt_iter)
+                train_writer.add_scalar('2.mask/numH', numH_loss, cnt_iter)
+                train_writer.add_scalar('2.mask/valence', valence_loss, cnt_iter)
+                train_writer.add_scalar('2.mask/isarom', isarom_loss, cnt_iter)
+                train_writer.add_scalar('1.status/mask', mask_loss, cnt_iter)
+
+                if args.train_logp:
+                    train_writer.add_scalar('3.auxiliary/logP', logP_loss, cnt_iter)
+                if args.train_mr:
+                    train_writer.add_scalar('3.auxiliary/mr', mr_loss, cnt_iter)
+                if args.train_tpsa:
+                    train_writer.add_scalar('3.auxiliary/tpsa', tpsa_loss, cnt_iter)
+
                 output = "[TRAIN] E:{:3}. P:{:>2.1f}%. Loss:{:>9.3}. Mask Loss:{:>9.3}. {:4.1f} mol/sec. Iter:{:6}.  Elapsed:{:6.1f} sec."
                 elapsed = time.time() - t
                 process_speed = (args.batch_size * args.log_every) / elapsed
@@ -523,7 +529,7 @@ if __name__ == '__main__':
     parser.add_argument("-nw", "--num_workers", type=int, default=12)
 
     # ===== Logging =====#
-    parser.add_argument("-li", "--log_every", type=int, default= 10 * 10)  # Test: 10  #Default 40*10
+    parser.add_argument("-li", "--log_every", type=int, default= 5 * 10)  # Test: 10  #Default 40*10
     parser.add_argument("-vi", "--validate_every", type=int, default= 1000)  # Test:50 #Default 40*50
     parser.add_argument("-si", "--save_every", type=int, default= 1000)  # Test:50 #Default 40*100
 
