@@ -480,13 +480,15 @@ if __name__ == '__main__':
     torch.manual_seed(seed)
 
     parser = argparse.ArgumentParser(description='Add logP, TPSA, MR, PBF value on .smi files')
-    # ===== Model Definition =====#
+
+    # ===== Label Size Constant ===== #
     parser.add_argument("--vocab_size", type=int, default=40)
     parser.add_argument("--degree_size", type=int, default=6)
     parser.add_argument("--numH_size", type=int, default=5)
     parser.add_argument("--valence_size", type=int, default=6)
     parser.add_argument("--isarom_size", type=int, default=2)
 
+    # ===== Model Definition =====#
     parser.add_argument("--in_dim", type=int, default=64)
     parser.add_argument("--classifier_dim", type=int, default=59)
     parser.add_argument("--out_dim", type=int, default=256)
