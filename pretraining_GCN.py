@@ -199,7 +199,6 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
                 t = time.time()
                 logger.info(output)
 
-
             # Validate Model
             if cnt_iter % args.validate_every == 0:
                 optimizer['mask'].zero_grad()
@@ -216,10 +215,10 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
     logger.info('Training Completed')
 
 
-
 ######################################
 # ===== Validating and Testing   =====#
 ######################################
+
 
 def validate(models, data_loader, args, **kwargs):
     t = time.time()
