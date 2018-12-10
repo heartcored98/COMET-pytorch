@@ -1,6 +1,25 @@
 # COMET-pytorch
 COMET(Chemically Omnipotent Molecular Encoder from Transformer)
 
+# Branch Version  
+- [X] branch_v1_weighted_sampling_dataloader
+    - Data Loader : data loader sampling masking atom based on their inverse occurence probability  
+    - Logging : record macro f1 score, confusion matrix, weight histogram  
+    
+- [ ] branch_v2_weighted_sampling_dataset_fixed_size_batch    
+    - Data : dataset consist more balanced molecule sample with more abundant rare symbol.  
+    - Data Set : It preprocess each molecule and hold their Adjacency Matrix and Feature Matrix. Also each molecule is parsed into fixed size vector.    
+    - Data Loader : masking indices were selected based on the symbol distribution and return A, X, masked_A, masked_X, masked_idx, P  
+    - Ground Truth : previous ground truth matrix is indexed inside the training iteration.  
+    - Loss : weighted cross-entropy loss applied.  
+     
+- [ ] branch_v3_radius_masking_dataloader  
+    - Data Loader : Firstly sampling center atom with occurence distribution. Secondly, it find out adjacent atom by multiplying A matrix with r(radius) times. Construct index set and truncate with num_masking  
+    
+- [ ] branch_v4_adj_masking_dataloader  
+    - Data Loader : Masked A would provide  
+    - Model : A should be calculate from previous A.   
+
 # Reference  
 Register conda environment to jupyter notebook : https://stackoverflow.com/questions/39604271/conda-environments-not-showing-up-in-jupyter-notebook  
 Install RDkit : https://anaconda.org/rdkit/rdkit  
