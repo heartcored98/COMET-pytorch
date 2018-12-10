@@ -86,10 +86,11 @@ def masking_feature(feature, num_masking, erase_rate, list_prob):
     prob_masking = np.random.rand(len(masking_indices))
     for i in masking_indices:
 
-        # Masking Atom Symbol
+        # Masking All Feature
         if prob_masking[i] < ERASE_RATE:
             masked_feature[i, :] = 0
 
+        # Otherwise, replace with random feature
         elif prob_masking[0] > 1- ((1-ERASE_RATE) * 0.5):
             masked_feature[i, 0] = np.random.randint(1, 41)
             masked_feature[i, 1] = np.random.randint(1, 7)
