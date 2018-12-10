@@ -12,6 +12,8 @@ import pandas as df
 import re
 import numpy as np
 from numpy.random import choice
+import gc
+
 
 from dataloader import *
 
@@ -55,12 +57,18 @@ def process_smile(row):
     try:
         smi = row[0]
         m = Chem.MolFromSmiles(smi)
-        return smi, MolLogP(m), MolMR(m), CalcTPSA(m), m.GetNumAtoms()
+        logP = MolLogP(m)
+        mr = MolMR(m)
+        tpsa = CalcTPSA(m)
+        n_atom = m.GetNumAtoms()
+        del m
+        return smi, logP, mr, tpsa, n_atom
     except:
         return None, None, None, None, None
 
 
 def process_dataset(chunk_size,
+                    temp_size,
                     num_worker,
                     flag_continue,
                     sampling_rate,
@@ -88,56 +96,79 @@ def process_dataset(chunk_size,
     target_list_file = list_file[start_offset:end_offset]
     threshold = int(1 / sampling_rate) * 100
 
+    last_train_ck = 0
+    last_val_ck = 0
+
     # Iterating raw zinc dataset and parse it.
     for idx, filename in enumerate(target_list_file):
         m_ts = time.time()
         with open(join(raw_dir_path, filename)) as file:
             list_row = file.readlines()[1:]
-            if len(list_row) > threshold:
+        if len(list_row) > threshold:
 
-                # Calculate individual sampling rate of molecule
-                with mp.Pool(processes=num_worker) as pool:
-                    row_prob = np.array(pool.map(get_mol_importance, list_row))
-                samplings = np.nan_to_num(np.array([row[1] for row in row_prob], dtype=np.float), 0)
-                samplings /= np.sum(samplings)
+            # Calculate individual sampling rate of molecule
+            with mp.Pool(processes=num_worker) as pool:
+                row_prob = np.array(pool.map(get_mol_importance, list_row))
+            samplings = np.nan_to_num(np.array([row[1] for row in row_prob], dtype=np.float), 0)
+            samplings /= np.sum(samplings)
 
-                # Sample molecules based on each importance
-                sampled_idx = choice(range(len(row_prob)), max(int(len(row_prob)*sampling_rate), 1), replace=False, p=samplings)
-                sampled_rows = row_prob[sampled_idx]
-                with mp.Pool(processes=num_worker) as pool:
-                    data = pool.map(process_smile, sampled_rows)
+            # Sample molecules based on each importance
+            sampled_idx = choice(range(len(row_prob)), max(int(len(row_prob)*sampling_rate), 1), replace=False, p=samplings)
+            sampled_rows = row_prob[sampled_idx]
+            with mp.Pool(processes=num_worker) as pool:
+                data = pool.map(process_smile, sampled_rows)
 
-                # Split dataset into training and validation set
-                train_data, val_data = train_test_split(data,  test_size=test_size)
-                train_row_buffer += train_data
-                val_row_buffer += val_data
-                cnt_train_mol += len(train_data)
-                cnt_val_mol += len(val_data)
+            # Split dataset into training and validation set
+            train_data, val_data = train_test_split(data,  test_size=test_size)
+            train_row_buffer += train_data
+            val_row_buffer += val_data
+            cnt_train_mol += len(train_data)
+            cnt_val_mol += len(val_data)
 
-                while len(train_row_buffer) > chunk_size:
-                    if len(train_row_buffer) >= chunk_size:
-                        output_train = train_row_buffer[:chunk_size]
-                        df_train = df.DataFrame.from_records(output_train, columns=label_columns)
-                        df_train = df_train.dropna()
-                        df_train.sort_values(by=['length'], ascending=False, inplace=True)
-                        df_train.to_csv(path_or_buf=join(output_dir_path, 'train/train{:06d}.csv'.format(cnt_train_chunk)), float_format='%g', index=False)
-                        train_row_buffer = train_row_buffer[chunk_size:]
-                        cnt_train_chunk += 1
+            if len(train_row_buffer) < chunk_size and len(train_row_buffer) // temp_size > last_train_ck:
+                df_train = df.DataFrame.from_records(train_row_buffer, columns=label_columns)
+                df_train = df_train.dropna()
+                df_train.sort_values(by=['length'], ascending=False, inplace=True)
+                df_train.to_csv(path_or_buf=join(output_dir_path, 'train/train{:06d}.csv'.format(cnt_train_chunk)),
+                                float_format='%g', index=False)
+                last_train_ck = len(train_row_buffer) // temp_size
+                print("Train Checkpoint Saved with train{:06d}.csv CK:{}".format(cnt_train_chunk, last_train_ck))
 
-                    if len(val_row_buffer) >= chunk_size:
-                        output_val = val_row_buffer[:chunk_size]
-                        df_val = df.DataFrame.from_records(output_val, columns=label_columns)
-                        df_val = df_val.dropna()
-                        df_val.sort_values(by=['length'], ascending=False, inplace=True)
-                        df_val.to_csv(path_or_buf=join(output_dir_path, 'val/val{:06d}.csv'.format(cnt_val_chunk)), float_format='%g', index=False)
-                        val_row_buffer = val_row_buffer[chunk_size:]
-                        cnt_val_chunk += 1
-            else:
-                data = []
+
+            if len(val_row_buffer) < chunk_size and len(val_row_buffer) // temp_size > last_val_ck:
+                df_val = df.DataFrame.from_records(val_row_buffer, columns=label_columns)
+                df_val = df_val.dropna()
+                df_val.sort_values(by=['length'], ascending=False, inplace=True)
+                df_val.to_csv(path_or_buf=join(output_dir_path, 'val/val{:06d}.csv'.format(cnt_val_chunk)),
+                              float_format='%g', index=False)
+                last_val_ck = len(val_row_buffer) // temp_size
+                print("Valid Checkpoint Saved with   val{:06d}.csv CK:{}".format(cnt_val_chunk, last_val_ck))
+
+            while len(train_row_buffer) > chunk_size:
+                if len(train_row_buffer) >= chunk_size:
+                    output_train = train_row_buffer[:chunk_size]
+                    df_train = df.DataFrame.from_records(output_train, columns=label_columns)
+                    df_train = df_train.dropna()
+                    df_train.sort_values(by=['length'], ascending=False, inplace=True)
+                    df_train.to_csv(path_or_buf=join(output_dir_path, 'train/train{:06d}.csv'.format(cnt_train_chunk)), float_format='%g', index=False)
+                    train_row_buffer = train_row_buffer[chunk_size:]
+                    cnt_train_chunk += 1
+
+                if len(val_row_buffer) >= chunk_size:
+                    output_val = val_row_buffer[:chunk_size]
+                    df_val = df.DataFrame.from_records(output_val, columns=label_columns)
+                    df_val = df_val.dropna()
+                    df_val.sort_values(by=['length'], ascending=False, inplace=True)
+                    df_val.to_csv(path_or_buf=join(output_dir_path, 'val/val{:06d}.csv'.format(cnt_val_chunk)), float_format='%g', index=False)
+                    val_row_buffer = val_row_buffer[chunk_size:]
+                    cnt_val_chunk += 1
+        else:
+            data = []
 
         m_te = time.time()
-        print("Processed {:4}/{:4} files of {:8} mols took {:5.1f} sec. {:7.1f} mol/sec. Train: {:4} Val: {:4} Elap: {:6.1f} sec".format(
-                idx + 1, len(target_list_file), len(data), m_te - m_ts, len(data) / (m_te - m_ts), cnt_train_chunk+1,
+        gc.collect()
+        print("Processed {} {:4}/{:4} files of {:8} mols took {:5.1f} sec. {:7.1f} mol/sec. Train: {:4} Val: {:4} Elap: {:6.1f} sec".format(
+                filename, idx + 1, len(target_list_file), len(data), m_te - m_ts, len(data) / (m_te - m_ts), cnt_train_chunk+1,
                 cnt_val_chunk+1, time.time() - ts))
 
     # Convert dataset into Dataframe and save it into csv format
@@ -169,12 +200,13 @@ if __name__ == '__main__':
     parser.add_argument("-q", "--sampling_rate", help="sampling rate", type=float, default=0.0047049)
 
     parser.add_argument("-c", "--chunk_size", help="number of rows in one chunk ", type=int, default=25000000)
+    parser.add_argument("-ts", "--temp_size", help="number of rows in one chunk ", type=int, default=50000)
     parser.add_argument("-n", "--num_worker", help="number of co-working process", type=int, default=16)
     parser.add_argument("-r", "--test_size", help="portion of validation_set", type=float, default=0.2)
     parser.add_argument("-t", "--flag_continue", help="whether continue writing file", type=bool, default=False)
 
     parser.add_argument("-s", "--start_offset", help="starting from i-th file in directory", type=int, default=0)
-    parser.add_argument("-e", "--end_offset", help="end processing at i-th file in directory", type=int, default=10)
+    parser.add_argument("-e", "--end_offset", help="end processing at i-th file in directory", type=int, default=-1)
     parser.add_argument("-d", "--raw_dir_path", help="directory where dataset stored", type=str, default='./raw_zinc_smiles')
     parser.add_argument("-o", "--output_dir_path", help="directory where processed data saved", type=str, default='./dataset/bal_s')
 
@@ -182,6 +214,7 @@ if __name__ == '__main__':
 
 
     process_dataset(chunk_size=args.chunk_size,
+                    temp_size=args.temp_size,
                     num_worker=args.num_worker,
                     sampling_rate=args.sampling_rate,
                     flag_continue=args.flag_continue,
