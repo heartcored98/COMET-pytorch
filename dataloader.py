@@ -190,7 +190,7 @@ class BatchSampler(Sampler):
 class zincDataset(Dataset):
     def __init__(self, data_path, skip_header=True):
         self.data = pd.read_csv(data_path)
-        self.data = self.data.sort_values(by=['length'])
+        # self.data = self.data.sort_values(by=['length'])
         self.data = self.data.reset_index()
         self.data['mr'] = np.log10(self.data['mr'] + 1)
         self.data['tpsa'] = np.log10(self.data['tpsa'] + 1)
