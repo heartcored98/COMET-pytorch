@@ -83,36 +83,18 @@ def masking_feature(feature, num_masking, erase_rate, list_prob):
     masking_indices = np.random.choice(len(feature), num_masking, replace=False, p=list_prob / np.sum(list_prob))
     ground_truth = np.copy(feature[masking_indices, :])
     masked_feature = np.copy(feature)
+    prob_masking = np.random.rand(len(masking_indices))
     for i in masking_indices:
-        prob_masking = np.random.rand(5)
-        # Masking Atom Symbol 
-        if prob_masking[0] < ERASE_RATE:
-            masked_feature[i, 0] = 0
+
+        # Masking Atom Symbol
+        if prob_masking[i] < ERASE_RATE:
+            masked_feature[i, :] = 0
+
         elif prob_masking[0] > 1- ((1-ERASE_RATE) * 0.5):
             masked_feature[i, 0] = np.random.randint(1, 41)
-            
-        # Masking Degree 
-        if prob_masking[1] < ERASE_RATE:
-            masked_feature[i, 1] = 0
-        elif prob_masking[1] > 1- ((1-ERASE_RATE) * 0.5):
             masked_feature[i, 1] = np.random.randint(1, 7)
-
-        # Masking Num Hs
-        if prob_masking[2] < ERASE_RATE:
-            masked_feature[i, 2] = 0
-        elif prob_masking[2] > 1- ((1-ERASE_RATE) * 0.5):
             masked_feature[i, 2] = np.random.randint(1, 6)
-            
-        # Masking Valence
-        if prob_masking[3] < ERASE_RATE:
-            masked_feature[i, 3] = 0
-        elif prob_masking[3] > 1- ((1-ERASE_RATE) * 0.5):
             masked_feature[i, 3] = np.random.randint(1, 7)
-            
-        # Masking IsAromatic
-        if prob_masking[4] < ERASE_RATE:
-            masked_feature[i, 4] = 0
-        elif prob_masking[4] > 1- ((1-ERASE_RATE) * 0.5):
             masked_feature[i, 4] = np.random.randint(1, 3)
 
     return masked_feature, ground_truth, masking_indices
