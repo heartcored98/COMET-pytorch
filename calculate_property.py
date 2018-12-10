@@ -38,19 +38,23 @@ def get_mol_importance(row):
     """Return Average Sampling Rate of Molecule based on symbol occurence"""
     try:
         smi = row.split(' ')[0].strip()
-        mol = Chem.MolFromSmiles(smi)
-        probs = np.zeros(len(mol.GetAtoms()))
-        for i, atom in enumerate(mol.GetAtoms()):
-            probs[i] = LIST_PROB[char_to_ix(atom.GetSymbol(), LIST_SYMBOLS)[0]]
-        return (smi, mol, np.max(probs))
+        word = "".join(re.findall("[a-zA-Z]+", smi)).lower()
+        word = set(word)
+        word.discard('c')
+        word.discard('n')
+        word.discard('o')
+        if len(word) > 0:
+            return (smi, len(word))
+        return (smi, 1e-9)
     except:
-        return (None, None, None)
+        return (None, None)
 
 
 def process_smile(row):
     """Return molecular properties """
     try:
-        smi, m = row[0], row[1]
+        smi = row[0]
+        m = Chem.MolFromSmiles(smi)
         return smi, MolLogP(m), MolMR(m), CalcTPSA(m), m.GetNumAtoms()
     except:
         return None, None, None, None, None
@@ -94,7 +98,7 @@ def process_dataset(chunk_size,
                 # Calculate individual sampling rate of molecule
                 with mp.Pool(processes=num_worker) as pool:
                     row_prob = np.array(pool.map(get_mol_importance, list_row))
-                samplings = np.nan_to_num(np.array([row[2] for row in row_prob], dtype=np.float), 0)
+                samplings = np.nan_to_num(np.array([row[1] for row in row_prob], dtype=np.float), 0)
                 samplings /= np.sum(samplings)
 
                 # Sample molecules based on each importance
@@ -104,7 +108,7 @@ def process_dataset(chunk_size,
                     data = pool.map(process_smile, sampled_rows)
 
                 # Split dataset into training and validation set
-                train_data, val_data = train_test_split(data,  test_size=test_size, random_state=111)
+                train_data, val_data = train_test_split(data,  test_size=test_size)
                 train_row_buffer += train_data
                 val_row_buffer += val_data
                 cnt_train_mol += len(train_data)
@@ -115,6 +119,7 @@ def process_dataset(chunk_size,
                         output_train = train_row_buffer[:chunk_size]
                         df_train = df.DataFrame.from_records(output_train, columns=label_columns)
                         df_train = df_train.dropna()
+                        df_train.sort_values(by=['length'], ascending=False, inplace=True)
                         df_train.to_csv(path_or_buf=join(output_dir_path, 'train/train{:06d}.csv'.format(cnt_train_chunk)), float_format='%g', index=False)
                         train_row_buffer = train_row_buffer[chunk_size:]
                         cnt_train_chunk += 1
@@ -123,6 +128,7 @@ def process_dataset(chunk_size,
                         output_val = val_row_buffer[:chunk_size]
                         df_val = df.DataFrame.from_records(output_val, columns=label_columns)
                         df_val = df_val.dropna()
+                        df_val.sort_values(by=['length'], ascending=False, inplace=True)
                         df_val.to_csv(path_or_buf=join(output_dir_path, 'val/val{:06d}.csv'.format(cnt_val_chunk)), float_format='%g', index=False)
                         val_row_buffer = val_row_buffer[chunk_size:]
                         cnt_val_chunk += 1
@@ -137,10 +143,12 @@ def process_dataset(chunk_size,
     # Convert dataset into Dataframe and save it into csv format
     df_train = df.DataFrame.from_records(train_row_buffer, columns=label_columns)
     df_train = df_train.dropna()
+    df_train.sort_values(by=['length'], ascending=False, inplace=True)
     df_train.to_csv(path_or_buf=join(output_dir_path, 'train/train{:06d}.csv'.format(cnt_train_chunk)),
                         float_format='%g', index=False)
     df_val = df.DataFrame.from_records(val_row_buffer, columns=label_columns)
     df_val = df_val.dropna()
+    df_val.sort_values(by=['length'], ascending=False, inplace=True)
     df_val.to_csv(path_or_buf=join(output_dir_path, 'val/val{:06d}.csv'.format(cnt_val_chunk)), float_format='%g',
                   index=False)
 
@@ -158,7 +166,7 @@ if __name__ == '__main__':
     # S : 0.0047049 -> 2M / 0.5M
     # XS : 0.0047049 * 0.3 -> 0.6M / 0.15M
     # XXS : 0.00047049 -> 0.2M / 0.05M
-    parser.add_argument("-q", "--sampling_rate", help="sampling rate", type=float, default=0.00047049)
+    parser.add_argument("-q", "--sampling_rate", help="sampling rate", type=float, default=0.0047049)
 
     parser.add_argument("-c", "--chunk_size", help="number of rows in one chunk ", type=int, default=25000000)
     parser.add_argument("-n", "--num_worker", help="number of co-working process", type=int, default=16)
@@ -168,7 +176,7 @@ if __name__ == '__main__':
     parser.add_argument("-s", "--start_offset", help="starting from i-th file in directory", type=int, default=0)
     parser.add_argument("-e", "--end_offset", help="end processing at i-th file in directory", type=int, default=10)
     parser.add_argument("-d", "--raw_dir_path", help="directory where dataset stored", type=str, default='./raw_zinc_smiles')
-    parser.add_argument("-o", "--output_dir_path", help="directory where processed data saved", type=str, default='./dataset/bal_xxs')
+    parser.add_argument("-o", "--output_dir_path", help="directory where processed data saved", type=str, default='./dataset/bal_s')
 
     args = parser.parse_args()
 
