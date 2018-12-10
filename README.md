@@ -24,14 +24,13 @@ COMET(Chemically Omnipotent Molecular Encoder from Transformer)
 Total Number of Molecules in Raw Zinc Dataset : 531,354,040
 
 |   Name   | Train Size | Train Coverage | Valid Size | Valid Coverage | Sampling Rate |
-|:--------:|:----------:|:--------------:|:----------:|:--------------:|:-------------:|
-|  data_m  |  42507072  |                |  10627596  |                |               |
-|  data_ms |   4249706  |                |   1063365  |                |               |
-|  data_s  |   1998892  |                |   500701   |                |               |
-|  data_xs |   424115   |                |   107133   |                |               |
-| data_xxs |    99216   |                |    26058   |                |  0.000235245  |
-|   bal_s  |   1979256  |                |   495380   |                |   0.0047049   |
-
+|:--------:|-----------:|---------------:|-----------:|---------------:|--------------:|
+|  data_m  |   42507072 |                |   10627596 |                |               |
+|  data_ms |    4249706 |                |    1063365 |                |               |
+|  data_s  |    1998892 |                |     500701 |                |               |
+|  data_xs |     424115 |                |     107133 |                |               |
+| data_xxs |      99216 |                |      26058 |                |   0.000235245 |
+|   bal_s  |    1979256 |                |     495380 |                |     0.0047049 |
 
 # Reference  
 Register conda environment to jupyter notebook : https://stackoverflow.com/questions/39604271/conda-environments-not-showing-up-in-jupyter-notebook  
