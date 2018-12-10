@@ -7,7 +7,7 @@ COMET(Chemically Omnipotent Molecular Encoder from Transformer)
     - [X] Logging : record macro f1 score, confusion matrix, weight histogram  
     
 - [ ] branch_v2_weighted_sampling_dataset_fixed_size_batch     
-    - [ ] Data : dataset consist more balanced molecule sample with more abundant rare symbol.  
+    - [X] Data : dataset consist more balanced molecule sample with more abundant rare symbol.  
     - [ ] Data Set : It preprocess each molecule and hold their Adjacency Matrix and Feature Matrix. Also each molecule is parsed into fixed size vector.    
     - [ ] Data Loader : masking indices were selected based on the symbol distribution and return A, X, masked_A, masked_X, masked_idx, P  
     - [ ] Ground Truth : previous ground truth matrix is indexed inside the training iteration.  

@@ -84,10 +84,10 @@ def masking_feature(feature, num_masking, erase_rate, list_prob):
     ground_truth = np.copy(feature[masking_indices, :])
     masked_feature = np.copy(feature)
     prob_masking = np.random.rand(len(masking_indices))
-    for i in masking_indices:
+    for idx, i in enumerate(masking_indices):
 
         # Masking All Feature
-        if prob_masking[i] < ERASE_RATE:
+        if prob_masking[idx] < ERASE_RATE:
             masked_feature[i, :] = 0
 
         # Otherwise, replace with random feature
