@@ -69,6 +69,11 @@ def mol2graph(smi):
         if i + 1 >= num_mol: break
     return X, A, P
 
+def preprocess_df(smiles, num_worker):
+    with mp.Pool(processes=num_worker) as pool:
+        mols = pool.map(mol2graph, smiles)
+    print(len(mols))
+
 def normalize_adj(mx):
     """ Symmetry Normalization """
     rowsum = np.diag(np.array(mx.sum(1)))
