@@ -3,7 +3,6 @@ from os.path import join
 import multiprocessing as mp
 
 from torch.utils.data import Dataset, DataLoader
-from torch.utils.data.sampler import Sampler, SequentialSampler
 from torch._six import int_classes as _int_classes
 from rdkit import Chem
 from scipy.linalg import fractional_matrix_power
@@ -11,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from utils import get_dir_files
+
 
 
 MASKING_RATE = 0

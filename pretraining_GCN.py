@@ -536,7 +536,7 @@ if __name__ == '__main__':
     parser.add_argument("-mn", "--model_name", type=str, required=True)
     parser.add_argument("--log_path", type=str, default='runs')
     parser.add_argument("--ck_filename", type=str, default=None) #'model_4_256_xs_basic_000_000000300.tar')
-    parser.add_argument("--dataset_path", type=str, default='./dataset/data_s')
+    parser.add_argument("--dataset_path", type=str, default='./dataset/bal_xxs')
 
     args = parser.parse_args()#["-mn", "metric_test_0.5_masking"])
 
@@ -556,22 +556,18 @@ if __name__ == '__main__':
     list_vals = get_dir_files(val_dataset_path)
 
     logger.info("##### Loading Train Dataloader #####")
-    train_dataloader = zincDataLoader(join(train_dataset_path, list_trains[0]),
-                                      batch_size=args.batch_size,
-                                      drop_last=False,
-                                      shuffle_batch=True,
-                                      num_workers=args.num_workers,
-                                      masking_rate=args.masking_rate,
-                                      erase_rate=args.erase_rate)
+    train_dataset = zincDataset(train_dataset_path, list_trains[0], args.num_workers)
+    train_dataloader = DataLoader(train_dataset,
+                                  batch_size=args.batch_size,
+                                  drop_last=False,
+                                  num_workers=args.num_workers)
 
     logger.info("##### Loading Validation Dataloader #####")
-    val_dataloader = zincDataLoader(join(val_dataset_path, list_vals[0]),
-                                    batch_size=args.test_batch_size,
-                                    drop_last=False,
-                                    shuffle_batch=False,
-                                    num_workers=args.num_workers,
-                                    masking_rate = args.masking_rate,
-                                    erase_rate = args.erase_rate)
+    val_dataset = zincDataset(val_dataset_path, list_vals[0], args.num_workers)
+    val_dataloader = DataLoader(val_dataset,
+                                batch_size=args.test_batch_size,
+                                drop_last=False,
+                                num_workers=args.num_workers)
 
     dataloader = {'train': train_dataloader, 'val': val_dataloader}
     logger.info("######## Starting Training ########")
