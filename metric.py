@@ -24,9 +24,7 @@ def compute_loss(pred_x, ground_x):
 
 
 def compute_metric(pred_x, ground_x):
-    batch_size = ground_x.shape[0]
-    num_masking = ground_x.shape[1]
-    ground_x = ground_x.view(batch_size * num_masking, -1)
+
     symbol_acc = accuracy_score(ground_x[:, 0].detach().cpu().numpy(),
                                 pred_x[:, :40].detach().max(dim=1)[1].cpu().numpy())
     degree_acc = accuracy_score(ground_x[:, 1].detach().cpu().numpy(),
@@ -41,9 +39,6 @@ def compute_metric(pred_x, ground_x):
 
 
 def compute_confusion(pred_x, ground_x, args):
-    batch_size = ground_x.shape[0]
-    num_masking = ground_x.shape[1]
-    ground_x = ground_x.view(batch_size * num_masking, -1)
 
     symbol_confusion = confusion_matrix(ground_x[:, 0].detach().cpu().numpy(),
                                         pred_x[:, :40].detach().max(dim=1)[1].cpu().numpy(),

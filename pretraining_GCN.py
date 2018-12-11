@@ -57,7 +57,7 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
 
     for epoch in range(epoch, args.epoch+1):
         for batch_idx, batch in enumerate(dataloader['train']):
-            
+            t1 = time.time()
             # Setting Train Mode
             for _, model in models.items():
                 model.train()
@@ -106,11 +106,11 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
             input_C = Variable(C).to(args.device).float()
             logp, mr, tpsa = input_C[:, 0], input_C[:, 1], input_C[:, 2]
 
-
+            t2 = time.time()
             # Encoding Masked Molecule
             encoded_X, _, molvec = models['encoder'](mask_X, input_A)
             pred_X = models['classifier'](encoded_X, molvec, mask_idx)
-            print(true_X.shape, pred_X.shape)
+
             # Compute Mask Task Loss
             symbol_loss, degree_loss, numH_loss, valence_loss, isarom_loss = compute_loss(pred_X, true_X)
             mask_loss = symbol_loss + degree_loss + numH_loss + valence_loss + isarom_loss
@@ -121,6 +121,7 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
             train_writer.add_scalar('1.status/lr', optimizer['mask'].rate(cnt_iter), cnt_iter)
             torch.cuda.empty_cache()
 
+            t3 = time.time()
             # Encoding Original Molecule
             auxiliary_loss = None
             if args.train_logp or args.train_mr or args.train_tpsa:
@@ -146,6 +147,8 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
                 optimizer['auxiliary'].step(cnt_iter)
                 torch.cuda.empty_cache()
 
+            t4 = time.time()
+            print("total {:2.2f}. Prepare {:2.2f}. Mask {:2.2f}. Aux {:2.2f}".format(t4-t1, t2-t1, t3-t2, t4-t3))
             cnt_iter += 1
             setattr(args, 'epoch_now', epoch)
             setattr(args, 'iter_now', cnt_iter)
@@ -236,21 +239,53 @@ def validate(models, data_loader, args, **kwargs):
 
     with torch.no_grad():
         for batch_idx, batch in enumerate(data_loader):
-            origin_X, masked_X, A, mol_prop, ground_X, idx_M = batch
-            origin_X = Variable(torch.from_numpy(origin_X)).to(args.device).long()
-            masked_X = Variable(torch.from_numpy(masked_X)).to(args.device).long()
-            A = Variable(torch.from_numpy(A)).to(args.device).float()
-            mol_prop = Variable(torch.from_numpy(mol_prop)).to(args.device).float()
-            logp, mr, tpsa = mol_prop[:, 0], mol_prop[:, 1], mol_prop[:, 2]
-            ground_X = Variable(torch.from_numpy(ground_X)).to(args.device).long()
-            idx_M = Variable(torch.from_numpy(idx_M)).to(args.device).long()
+            # Get Batch Sample from DataLoader
+            num_masking = int(args.masking_rate * args.max_len)
+            X, A, C, P = batch
+
+            # Sampling Masking Center Atom
+            center_idx = np.zeros(args.batch_size, dtype=np.uint8)
+            for i, p_row in enumerate(P.numpy()):
+                center_idx[i] = np.random.choice(np.array(args.max_len), 1, p=p_row)
+            radius_A = torch.matrix_power(A.float(), args.radius)
+
+            # Find Out which atom is connected to the center atom
+            adjacent_A = torch.stack([adj[center_idx[i]] for i, adj in enumerate(radius_A)]) + 1e-6
+            predict_idx = np.zeros((args.batch_size, num_masking), dtype=np.uint8)
+            for i, p_row in enumerate(adjacent_A.numpy()):
+                predict_idx[i] = np.random.choice(np.array(args.max_len), num_masking, p=p_row / p_row.sum(),
+                                                  replace=False)
+
+            # Get Target True X
+            predict_idx = torch.Tensor(predict_idx).long()
+            idx_1 = torch.LongTensor(range(args.batch_size)).unsqueeze(1).view(args.batch_size, -1).expand(-1, num_masking).flatten()
+            true_X = X[idx_1, predict_idx.flatten(), :]
+
+            # Get Input Masked X
+            idx_2 = np.random.choice(np.array(args.batch_size), int(args.batch_size * args.erase_rate), replace=False)
+            masking_idx = predict_idx[idx_2]
+            idx_2 = torch.LongTensor(idx_2).unsqueeze(1).view(idx_2.shape[0], -1).expand(-1, num_masking).flatten()
+            mask_X = torch.clone(X)
+            mask_X[idx_2, masking_idx.flatten(), :] = 0
+
+            # Normalize A matrix in order to prevent overflow
+
+            # Convert Tensor into Variable and Move to CUDA
+            mask_idx = Variable(predict_idx).to(args.device).long()
+            input_X = Variable(X).to(args.device).long()
+            mask_X = Variable(mask_X).to(args.device).long()
+            true_X = Variable(true_X).to(args.device).long()
+            input_A = Variable(A).to(args.device).float()
+            #     mask_A = Variable(mask_A).to(args.device).float()
+            input_C = Variable(C).to(args.device).float()
+            logp, mr, tpsa = input_C[:, 0], input_C[:, 1], input_C[:, 2]
 
             # Encoding Masked Molecule
-            encoded_X, _, molvec = models['encoder'](masked_X, A)
-            pred_mask = models['classifier'](encoded_X, molvec, idx_M)
+            encoded_X, _, molvec = models['encoder'](mask_X, input_A)
+            pred_mask = models['classifier'](encoded_X, molvec, mask_idx)
 
             # Compute Mask Task Loss & Property Regression Loss
-            symbol_loss, degree_loss, numH_loss, valence_loss, isarom_loss = compute_loss(pred_mask, ground_X)
+            symbol_loss, degree_loss, numH_loss, valence_loss, isarom_loss = compute_loss(pred_mask, true_X)
 
             list_symbol_loss.append(symbol_loss.item())
             list_degree_loss.append(degree_loss.item())
@@ -260,7 +295,7 @@ def validate(models, data_loader, args, **kwargs):
             list_mask_loss.append((symbol_loss + degree_loss + numH_loss + valence_loss + isarom_loss).item())
 
             # Compute Mask Task Accuracy & Property Regression MAE
-            symbol_acc, degree_acc, numH_acc, valence_acc, isarom_acc = compute_metric(pred_mask, ground_X)
+            symbol_acc, degree_acc, numH_acc, valence_acc, isarom_acc = compute_metric(pred_mask, true_X)
             list_symbol_acc.append(symbol_acc)
             list_degree_acc.append(degree_acc)
             list_numH_acc.append(numH_acc)
@@ -268,7 +303,7 @@ def validate(models, data_loader, args, **kwargs):
             list_isarom_acc.append(isarom_acc)
 
             # Accumulate Mask Task Confusion Matrix for F1-Metric
-            confusions = compute_confusion(pred_mask, ground_X, args)
+            confusions = compute_confusion(pred_mask, true_X, args)
             confusion_symbol += confusions[0]
             confusion_degree += confusions[1]
             confusion_numH += confusions[2]
@@ -276,7 +311,7 @@ def validate(models, data_loader, args, **kwargs):
             confusion_isarom += confusions[4]
 
             if args.train_logp or args.train_mr or args.train_tpsa:
-                _, _, molvec = models['encoder'](origin_X, A)
+                _, _, molvec = models['encoder'](input_X, input_A)
 
             if args.train_logp:
                 pred_logp = models['logP'](molvec)
@@ -440,7 +475,7 @@ def experiment(dataloader, args):
     optimizers = {'mask':mask_optimizer, 'auxiliary':auxiliary_optimizer}
 
     # Train Model
-    # validate(models, dataloader['val'], args, cnt_iter=cnt_iter, epoch=epoch)
+    validate(models, dataloader['val'], args, cnt_iter=cnt_iter, epoch=epoch)
     train(models, optimizers, dataloader, epoch, cnt_iter, args)
 
     # Logging Experiment Result
@@ -529,15 +564,17 @@ if __name__ == '__main__':
     train_dataset = zincDataset(train_dataset_path, list_trains[0], args.num_workers)
     train_dataloader = DataLoader(train_dataset,
                                   batch_size=args.batch_size,
-                                  drop_last=False,
-                                  num_workers=args.num_workers)
+                                  drop_last=True,
+                                  num_workers=args.num_workers,
+                                  shuffle=True)
 
     logger.info("##### Loading Validation Dataloader #####")
     val_dataset = zincDataset(val_dataset_path, list_vals[0], args.num_workers)
     val_dataloader = DataLoader(val_dataset,
                                 batch_size=args.test_batch_size,
-                                drop_last=False,
-                                num_workers=args.num_workers)
+                                drop_last=True,
+                                num_workers=args.num_workers,
+                                shuffle=False)
 
     dataloader = {'train': train_dataloader, 'val': val_dataloader}
     logger.info("######## Starting Training ########")

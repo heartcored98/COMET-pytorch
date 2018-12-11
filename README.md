@@ -6,13 +6,13 @@ COMET(Chemically Omnipotent Molecular Encoder from Transformer)
     - [X] Data Loader : data loader sampling masking atom based on their inverse occurence probability  
     - [X] Logging : record macro f1 score, confusion matrix, weight histogram  
     
-- [ ] branch_v2_weighted_sampling_dataset_fixed_size_batch     
+- [X] branch_v2_weighted_sampling_dataset_fixed_size_batch     
     - [X] Data : dataset consist more balanced molecule sample with more abundant rare symbol.  
     - [X] Data Set : Normalize molecular property with mean & std value. It is very fast with pandas operation.    
     - [X] Data Set : It preprocess each molecule and hold their Adjacency Matrix and Feature Matrix. Also each molecule is parsed into fixed size vector.    
-    - [ ] Inside Iteration : masking indices were selected based on the symbol distribution and return A, X, masked_A, masked_X, masked_idx, P  
-    - [ ] Ground Truth : previous ground truth matrix is indexed inside the training iteration.  
-    - [ ] Loss : weighted cross-entropy loss applied.  
+    - [X] Inside Iteration : masking indices were selected based on the symbol distribution and return A, X, masked_A, masked_X, masked_idx, P  
+    - [X] Ground Truth : previous ground truth matrix is indexed inside the training iteration.  
+    - [ ] ~~Loss : weighted cross-entropy loss applied.~~  
      
 - [ ] branch_v3_radius_masking_dataloader  
     - [ ] Data Loader : Firstly sampling center atom with occurence distribution. Secondly, it find out adjacent atom by multiplying A matrix with r(radius) times. Construct index set and truncate with num_masking  
