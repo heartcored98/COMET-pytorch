@@ -12,6 +12,7 @@ import pandas as pd
 
 MASKING_RATE = 0
 ERASE_RATE = 0
+MAX_LEN = 0
 
 LIST_SYMBOLS = ['C', 'N', 'O', 'S', 'F', 'H', 'Si', 'P', 'Cl', 'Br',
                 'Li', 'Na', 'K', 'Mg', 'Ca', 'Fe', 'As', 'Al', 'I', 'B',
