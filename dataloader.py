@@ -1,7 +1,6 @@
 
 import multiprocessing as mp
 
-import torch
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.sampler import Sampler, SequentialSampler
 from torch._six import int_classes as _int_classes
