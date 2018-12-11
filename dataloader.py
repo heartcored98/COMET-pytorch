@@ -1,4 +1,5 @@
 
+from os.path import join
 import multiprocessing as mp
 
 from torch.utils.data import Dataset, DataLoader
@@ -9,10 +10,12 @@ from scipy.linalg import fractional_matrix_power
 import numpy as np
 import pandas as pd
 
+from utils import get_dir_files
+
 
 MASKING_RATE = 0
 ERASE_RATE = 0
-MAX_LEN = 0
+MAX_LEN = 50
 
 LIST_SYMBOLS = ['C', 'N', 'O', 'S', 'F', 'H', 'Si', 'P', 'Cl', 'Br',
                 'Li', 'Na', 'K', 'Mg', 'Ca', 'Fe', 'As', 'Al', 'I', 'B',
@@ -49,30 +52,6 @@ def char_to_ix(x, allowable_set):
         return [0] # Unknown Atom Token
     return [allowable_set.index(x)+1]
 
-
-def mol2graph(smi):
-    mol = Chem.MolFromSmiles(smi)
-
-    X = np.zeros((max_len, 5), dtype=np.float32)
-    A = np.zeros((max_len, max_len), dtype=np.int8)
-    P = np.zeros(max_len, dtype=np.float32)
-
-    temp_A = Chem.rdmolops.GetAdjacencyMatrix(mol).astype(np.int8, copy=False)[:max_len, :max_len]
-    num_mol = temp_A.shape[0]
-
-    A[:num_mol, :num_mol] = temp_A + np.eye(temp_A.shape[0], dtype=np.int8)
-
-    for i, atom in enumerate(mol.GetAtoms()):
-        feature = atom_feature(atom)
-        X[i, :] = feature
-        P[i] = LIST_PROB[feature[0]]
-        if i + 1 >= num_mol: break
-    return X, A, P
-
-def preprocess_df(smiles, num_worker):
-    with mp.Pool(processes=num_worker) as pool:
-        mols = pool.map(mol2graph, smiles)
-    print(len(mols))
 
 def normalize_adj(mx):
     """ Symmetry Normalization """
@@ -117,132 +96,95 @@ def masking_feature(feature, num_masking, erase_rate, list_prob):
     return masked_feature, ground_truth, masking_indices
 
 
-def postprocess_batch(mini_batch):
-    # Assign masking and erase rate from global variables
-    masking_rate = MASKING_RATE
-    erase_rate = ERASE_RATE
+def mol2graph(smi):
+    mol = Chem.MolFromSmiles(smi)
 
-    """ Given mini-batch sample, adjacency matrix and node feature vectors were padded with zero. """
-    max_length = int(max([row[0] for row in mini_batch]))
-    min_length = int(min([row[0] for row in mini_batch]))
-    num_masking = max(1, int(min_length * masking_rate))
-    batch_length = len(mini_batch)
-    batch_masked_feature = np.zeros((batch_length, max_length, mini_batch[0][1].shape[1]), dtype=int)
-    batch_original_feature = np.zeros((batch_length, max_length, mini_batch[0][1].shape[1]), dtype=int)
-    batch_adj = np.zeros((batch_length, max_length, max_length))
-    batch_property = np.zeros((batch_length, 3))
-    batch_ground = np.zeros((batch_length, num_masking, mini_batch[0][1].shape[1]), dtype=int)
-    batch_masking = np.zeros((batch_length, num_masking), dtype=int)
-    
-    for i, row in enumerate(mini_batch):
-        mol_length, original_feature, adj, list_prob = int(row[0]), row[1], row[2], row[3]
-        masked_feature, ground_truth, masking_indices  = masking_feature(original_feature, num_masking, erase_rate, list_prob)
-        batch_masked_feature[i, :mol_length, :] = masked_feature
-        batch_original_feature[i, :mol_length, :] = original_feature
-        batch_ground[i, :, :] = ground_truth
-        batch_masking[i, :] = masking_indices
-        batch_adj[i, :mol_length, :mol_length] = adj #normalize_adj(adj+np.eye(len(adj)))
-        batch_property[i, :] = [row[4], row[5], row[6]]
-        
-    return batch_original_feature, batch_masked_feature, batch_adj, batch_property, batch_ground, batch_masking
+    X = np.zeros((MAX_LEN, 5), dtype=np.uint8)
+    A = np.zeros((MAX_LEN, MAX_LEN), dtype=np.uint8)
+    P = np.zeros(MAX_LEN, dtype=np.float32)
+
+    temp_A = Chem.rdmolops.GetAdjacencyMatrix(mol).astype(np.uint8, copy=False)[:MAX_LEN, :MAX_LEN]
+    num_atom = temp_A.shape[0]
+    A[:num_atom, :num_atom] = temp_A + np.eye(temp_A.shape[0], dtype=np.uint8)
+
+    for i, atom in enumerate(mol.GetAtoms()):
+        feature = atom_feature(atom)
+        X[i, :] = feature
+        P[i] = LIST_PROB[feature[0]]
+        if i + 1 >= num_atom: break
+    P /= P.sum()
+
+    return X, A, P
 
 
-class BatchSampler(Sampler):
-
-    def __init__(self, sampler, batch_size, drop_last=False, shuffle_batch=False):
-
-        if not isinstance(batch_size, _int_classes) or isinstance(batch_size, bool) or batch_size <= 0:
-            raise ValueError("batch_size should be a positive integeral value, "
-                             "but got batch_size={}".format(batch_size))
-        if not isinstance(drop_last, bool):
-            raise ValueError("drop_last should be a boolean value, but got "
-                             "drop_last={}".format(drop_last))
-        self.sampler = sampler
-        self.batch_size = batch_size
-        self.drop_last = drop_last
-        self.shuffle_batch = shuffle_batch
-
-    def __iter__(self):
-        batch = list()
-        mini_batch = list()
-        for idx in self.sampler:
-            mini_batch.append(idx)
-            if len(mini_batch) == self.batch_size:
-                batch.append(mini_batch)
-                mini_batch = []
-        if len(mini_batch) > 0 and not self.drop_last:
-            batch.append(mini_batch)
-            
-        if self.shuffle_batch:
-            return iter(np.random.permutation(batch))
-        else:
-            return iter(batch)
-            
-
-    def __len__(self):
-        if self.drop_last:
-            return len(self.sampler) // self.batch_size
-        else:
-            return (len(self.sampler) + self.batch_size - 1) // self.batch_size
+def preprocess_df(smiles, num_worker):
+    with mp.Pool(processes=num_worker) as pool:
+        mols = pool.map(mol2graph, smiles)
+    X, A, P = list(zip(*mols))
+    X = np.array(X, dtype=np.uint8)
+    A = np.array(A, dtype=np.uint8)
+    P = np.array(P, dtype=np.float32)
+    return X, A, P
 
 
 class zincDataset(Dataset):
-    def __init__(self, data_path, skip_header=True):
-        self.data = pd.read_csv(data_path)
-        self.data = self.data.reset_index()
-        # self.data = self.data.sort_values(by=['length'])
+    def __init__(self, data_path, filename, num_worker, save_cache=True, labels=['logP', 'mr', 'tpsa']):
 
-        # Mean & Std Normalize of molecular property
-        self.data.logP = (self.data.logP - LOGP_MEAN) / LOGP_STD
-        self.data.mr = np.log10(self.data.mr + 1)
-        self.data.mr = (self.data.mr - MR_MEAN) / MR_STD
-        self.data.tpsa= np.log10(self.data.tpsa + 1)
-        self.data.tpsa = (self.data.tpsa - TPSA_MEAN) / TPSA_STD
+        # Find whether cache is exist
+        files = get_dir_files(data_path)
+        cache_name = filename + '.npz'
+        if cache_name in files:
+            print("Cache Found. Loading Preprocessed Data from {}...".format(cache_name))
+            temp = np.load(join(data_path, cache_name))
+            self.X = temp['X']
+            self.A = temp['A']
+            self.C = temp['C']
+            self.P = temp['P']
+            print("Loading Preprocessed Data Complete!".format(cache_name))
 
-        # self.data = self.data.to_dict('index')
+        else:
+            print("Cache Not Found. Loading Dataset from {}...".format(filename))
+            # Load data from raw dataset
+            self.data = pd.read_csv(join(data_path, filename))
+            self.data = self.data.reset_index()
+            print("Dataset Loading Complete")
 
-    def get_df(self):
-        return self.data
+            # Mean & Std Normalize of molecular property
+            self.data.logP = (self.data.logP - LOGP_MEAN) / LOGP_STD
+            self.data.mr = np.log10(self.data.mr + 1)
+            self.data.mr = (self.data.mr - MR_MEAN) / MR_STD
+            self.data.tpsa= np.log10(self.data.tpsa + 1)
+            self.data.tpsa = (self.data.tpsa - TPSA_MEAN) / TPSA_STD
+            print("Molecular Property Normalization Complete!")
+
+            # Get Property Matrix
+            self.C = self.data[labels].values
+            smiles = self.data.smile.values
+            del self.data
+
+            # Convert smiles to Graph
+            print("Converting Smiles to Graph...")
+            self.X, self.A, self.P = preprocess_df(smiles, num_worker)
+            del smiles
+            print("Converting Smiles to Graph Complete!")
+
+            # Save Preprocessed Data
+            if save_cache:
+                print("Saving Preprocessed Data to {}...".format(cache_name))
+                np.savez_compressed(join(data_path, filename), X=self.X, A=self.A, C=self.C, P=self.P)
+                print("Saving Preprocessed Data Complete!")
 
     def __len__(self):
-        return len(self.data)
+        return len(self.X)
 
     def __getitem__(self, index):
-        row = self.data[index]
-        smile = row['smile']
+        X = self.X[index]
+        A = self.A[index]
+        C = self.C[index]
+        P = self.P[index]
+        num_atom = len(X)
+        return X, A, C, P, num_atom
 
-        mol = Chem.MolFromSmiles(smile)
-        adj = Chem.rdmolops.GetAdjacencyMatrix(mol)
-
-        adj = normalize_adj(adj + np.eye(len(adj)))
-
-        num_mol = len(mol.GetAtoms())
-        list_feature = np.zeros((num_mol, 5))
-        list_prob = np.zeros(num_mol)
-        for i, atom in enumerate(mol.GetAtoms()):
-            feature = atom_feature(atom)
-            list_feature[i] = feature
-            list_prob[i] = LIST_PROB[feature[0]]
-
-        return row['length'], list_feature, adj, list_prob, row['logP'], row['mr'], row['tpsa']
-
-    def get_sizes(self):
-        return self.data['length']
-    
-class zincDataLoader(DataLoader):
-    def __init__(self, data_path, batch_size, drop_last, shuffle_batch, num_workers, masking_rate, erase_rate):
-        global MASKING_RATE, ERASE_RATE
-        MASKING_RATE = masking_rate
-        ERASE_RATE = erase_rate
-
-        train_dataset = zincDataset(data_path=data_path)
-        sampler = SequentialSampler(train_dataset)
-        SortedBatchSampler = BatchSampler(sampler=sampler, batch_size=batch_size, drop_last=drop_last, shuffle_batch=shuffle_batch)
-        DataLoader.__init__(self, train_dataset,
-                            collate_fn=postprocess_batch, 
-                            num_workers=num_workers, 
-                            batch_sampler=SortedBatchSampler,
-                            pin_memory=True)
 
 if __name__ == '__main__':
     a = './dataset/data_xs/train/train000000.csv'
