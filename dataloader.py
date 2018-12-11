@@ -189,6 +189,9 @@ class zincDataset(Dataset):
 
         # self.data = self.data.to_dict('index')
 
+    def get_df(self):
+        return self.data
+
     def __len__(self):
         return len(self.data)
 
