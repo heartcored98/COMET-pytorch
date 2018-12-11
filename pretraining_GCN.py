@@ -2,75 +2,12 @@ import time
 import argparse
 
 from tensorboardX import SummaryWriter
-from sklearn.metrics import accuracy_score, confusion_matrix, mean_absolute_error
+from sklearn.metrics import mean_absolute_error
 
 from dataloader import *
 from utils import *
 from model import *
-
-##########################
-# ===== Compute Loss =====#
-##########################
-
-
-
-def compute_loss(pred_x, ground_x):
-    batch_size = ground_x.shape[0]
-    num_masking = ground_x.shape[1]
-    ground_x = ground_x.view(batch_size * num_masking, -1)
-
-    ground_x -= 1 #remove [mask] token which occupied index 0
-    ground_x[ground_x < 0] = 0
-    symbol_loss = F.cross_entropy(pred_x[:, :40], ground_x[:, 0].detach())
-
-    degree_loss = F.cross_entropy(pred_x[:, 40:46], ground_x[:, 1].detach())
-    numH_loss = F.cross_entropy(pred_x[:, 46:51], ground_x[:, 2].detach())
-    valence_loss = F.cross_entropy(pred_x[:, 51:57], ground_x[:, 3].detach())
-    isarom_loss = F.cross_entropy(pred_x[:, 57:59], ground_x[:, 4].detach())
-    return symbol_loss, degree_loss, numH_loss, valence_loss, isarom_loss
-
-
-def compute_metric(pred_x, ground_x):
-    batch_size = ground_x.shape[0]
-    num_masking = ground_x.shape[1]
-    ground_x = ground_x.view(batch_size * num_masking, -1)
-    symbol_acc = accuracy_score(ground_x[:, 0].detach().cpu().numpy(),
-                                pred_x[:, :40].detach().max(dim=1)[1].cpu().numpy())
-    degree_acc = accuracy_score(ground_x[:, 1].detach().cpu().numpy(),
-                                pred_x[:, 40:46].detach().max(dim=1)[1].cpu().numpy())
-    numH_acc = accuracy_score(ground_x[:, 2].detach().cpu().numpy(),
-                              pred_x[:, 46:51].detach().max(dim=1)[1].cpu().numpy())
-    valence_acc = accuracy_score(ground_x[:, 3].detach().cpu().numpy(),
-                                 pred_x[:, 51:57].detach().max(dim=1)[1].cpu().numpy())
-    isarom_acc = accuracy_score(ground_x[:, 4].detach().cpu().numpy(),
-                                pred_x[:, 57:59].detach().max(dim=1)[1].cpu().numpy())
-    return symbol_acc, degree_acc, numH_acc, valence_acc, isarom_acc
-
-
-def compute_confusion(pred_x, ground_x, args):
-    batch_size = ground_x.shape[0]
-    num_masking = ground_x.shape[1]
-    ground_x = ground_x.view(batch_size * num_masking, -1)
-
-    symbol_confusion = confusion_matrix(ground_x[:, 0].detach().cpu().numpy(),
-                                        pred_x[:, :40].detach().max(dim=1)[1].cpu().numpy(),
-                                        labels=range(args.vocab_size))
-    degree_confusion = confusion_matrix(ground_x[:, 1].detach().cpu().numpy(),
-                                        pred_x[:, 40:46].detach().max(dim=1)[1].cpu().numpy(),
-                                        labels=range(args.degree_size))
-    numH_confusion = confusion_matrix(ground_x[:, 2].detach().cpu().numpy(),
-                                      pred_x[:, 46:51].detach().max(dim=1)[1].cpu().numpy(),
-                                      labels=range(args.numH_size))
-
-    valence_confusion = confusion_matrix(ground_x[:, 3].detach().cpu().numpy(),
-                                         pred_x[:, 51:57].detach().max(dim=1)[1].cpu().numpy(),
-                                         labels=range(args.valence_size))
-
-    isarom_confusion = confusion_matrix(ground_x[:, 4].detach().cpu().numpy(),
-                                        pred_x[:, 57:59].detach().max(dim=1)[1].cpu().numpy(),
-                                        labels=range(args.isarom_size))
-
-    return symbol_confusion, degree_confusion, numH_confusion, valence_confusion, isarom_confusion
+from metric import *
 
 
 #######################
@@ -129,23 +66,54 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
             optimizer['auxiliary'].zero_grad()
 
             # Get Batch Sample from DataLoader
-            origin_X, masked_X, A, mol_prop, ground_X, idx_M = batch
-            origin_X = Variable(torch.from_numpy(origin_X)).to(args.device).long()
-            masked_X = Variable(torch.from_numpy(masked_X)).to(args.device).long()
-            A = Variable(torch.from_numpy(A)).to(args.device).float()
-            mol_prop = Variable(torch.from_numpy(mol_prop)).to(args.device).float()
-            logp, mr, tpsa = mol_prop[:,0], mol_prop[:,1], mol_prop[:,2]
-            ground_X = Variable(torch.from_numpy(ground_X)).to(args.device).long()
-            idx_M = Variable(torch.from_numpy(idx_M)).to(args.device).long()
+            num_masking = int(args.masking_rate * args.max_len)
+            X, A, C, P = batch
+
+            # Sampling Masking Center Atom
+            center_idx = np.zeros(args.batch_size, dtype=np.uint8)
+            for i, p_row in enumerate(P.numpy()):
+                center_idx[i] = np.random.choice(np.array(args.max_len), 1, p=p_row)
+            radius_A = torch.matrix_power(A.float(), args.radius)
+
+            # Find Out which atom is connected to the center atom
+            adjacent_A = torch.stack([adj[center_idx[i]] for i, adj in enumerate(radius_A)]) + 1e-6
+            predict_idx = np.zeros((args.batch_size, num_masking), dtype=np.uint8)
+            for i, p_row in enumerate(adjacent_A.numpy()):
+                predict_idx[i] = np.random.choice(np.array(args.max_len), num_masking, p=p_row / p_row.sum(),
+                                                  replace=False)
+
+            # Get Target True X
+            predict_idx = torch.Tensor(predict_idx).long()
+            idx_1 = torch.LongTensor(range(args.batch_size)).unsqueeze(1).view(args.batch_size, -1).expand(-1, num_masking).flatten()
+            true_X = X[idx_1, predict_idx.flatten(), :]
+
+            # Get Input Masked X
+            idx_2 = np.random.choice(np.array(args.batch_size), int(args.batch_size * args.erase_rate), replace=False)
+            masking_idx = predict_idx[idx_2]
+            idx_2 = torch.LongTensor(idx_2).unsqueeze(1).view(idx_2.shape[0], -1).expand(-1, num_masking).flatten()
+            mask_X = torch.clone(X)
+            mask_X[idx_2, masking_idx.flatten(), :] = 0
+
+            # Normalize A matrix in order to prevent overflow
+
+            # Convert Tensor into Variable and Move to CUDA
+            mask_idx = Variable(predict_idx).to(args.device).long()
+            input_X = Variable(X).to(args.device).long()
+            mask_X = Variable(mask_X).to(args.device).long()
+            true_X = Variable(true_X).to(args.device).long()
+            input_A = Variable(A).to(args.device).float()
+            #     mask_A = Variable(mask_A).to(args.device).float()
+            input_C = Variable(C).to(args.device).float()
+            logp, mr, tpsa = input_C[:, 0], input_C[:, 1], input_C[:, 2]
+
 
             # Encoding Masked Molecule
-            encoded_X, _, molvec = models['encoder'](masked_X, A)
-            pred_mask = models['classifier'](encoded_X, molvec, idx_M)
-
+            encoded_X, _, molvec = models['encoder'](mask_X, input_A)
+            pred_X = models['classifier'](encoded_X, molvec, mask_idx)
+            print(true_X.shape, pred_X.shape)
             # Compute Mask Task Loss
-            symbol_loss, degree_loss, numH_loss, valence_loss, isarom_loss = compute_loss(pred_mask, ground_X)
+            symbol_loss, degree_loss, numH_loss, valence_loss, isarom_loss = compute_loss(pred_X, true_X)
             mask_loss = symbol_loss + degree_loss + numH_loss + valence_loss + isarom_loss
-
 
             # Backprogating and Updating Parameter
             mask_loss.backward()
@@ -156,7 +124,7 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
             # Encoding Original Molecule
             auxiliary_loss = None
             if args.train_logp or args.train_mr or args.train_tpsa:
-                _, _, molvec = models['encoder'](origin_X, A)
+                _, _, molvec = models['encoder'](input_X, input_A)
 
             # Compute Loss of Original Molecule Property
             if args.train_logp:
@@ -472,7 +440,7 @@ def experiment(dataloader, args):
     optimizers = {'mask':mask_optimizer, 'auxiliary':auxiliary_optimizer}
 
     # Train Model
-    validate(models, dataloader['val'], args, cnt_iter=cnt_iter, epoch=epoch)
+    # validate(models, dataloader['val'], args, cnt_iter=cnt_iter, epoch=epoch)
     train(models, optimizers, dataloader, epoch, cnt_iter, args)
 
     # Logging Experiment Result
@@ -519,13 +487,15 @@ if __name__ == '__main__':
     parser.add_argument("-p", "--train_logp", type=bool, default=True)
     parser.add_argument("-r", "--train_mr", type=bool, default=True)
     parser.add_argument("-t", "--train_tpsa", type=bool, default=True)
-    parser.add_argument("-mr", "--masking_rate", type=float, default=0.15)
-    parser.add_argument("-er", "--erase_rate", type=float, default=0.5)
+    parser.add_argument("-mr", "--masking_rate", type=float, default=0.2)
+    parser.add_argument("-R", "--radius", type=int, default=2)
+    parser.add_argument("-er", "--erase_rate", type=float, default=0.8)
+    parser.add_argument("-ml", "--max_len", type=int, default=50)
 
 
     parser.add_argument("-ep", "--epoch", type=int, default=100)
-    parser.add_argument("-bs", "--batch_size", type=int, default=512)
-    parser.add_argument("-tbs", "--test_batch_size", type=int, default=512)
+    parser.add_argument("-bs", "--batch_size", type=int, default=1024)
+    parser.add_argument("-tbs", "--test_batch_size", type=int, default=1024)
     parser.add_argument("-nw", "--num_workers", type=int, default=12)
 
     # ===== Logging =====#

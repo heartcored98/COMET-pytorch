@@ -182,8 +182,7 @@ class zincDataset(Dataset):
         A = self.A[index]
         C = self.C[index]
         P = self.P[index]
-        num_atom = len(X)
-        return X, A, C, P, num_atom
+        return X, A, C, P
 
 
 if __name__ == '__main__':
