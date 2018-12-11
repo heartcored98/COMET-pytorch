@@ -12,6 +12,7 @@ import pandas as pd
 
 MASKING_RATE = 0
 ERASE_RATE = 0
+
 LIST_SYMBOLS = ['C', 'N', 'O', 'S', 'F', 'H', 'Si', 'P', 'Cl', 'Br',
                 'Li', 'Na', 'K', 'Mg', 'Ca', 'Fe', 'As', 'Al', 'I', 'B',
                 'V', 'Tl', 'Sb', 'Sn', 'Ag', 'Pd', 'Co', 'Se', 'Ti', 'Zn',
@@ -48,19 +49,24 @@ def char_to_ix(x, allowable_set):
     return [allowable_set.index(x)+1]
 
 
-def one_of_k_encoding_unk(x, allowable_set):
-    """Maps inputs not in the allowable set to the last element."""
-    if x not in allowable_set:
-        x = allowable_set[-1]
-    return list(map(lambda s: x == s, allowable_set))
+def mol2graph(smi):
+    mol = Chem.MolFromSmiles(smi)
 
+    X = np.zeros((max_len, 5), dtype=np.float32)
+    A = np.zeros((max_len, max_len), dtype=np.int8)
+    P = np.zeros(max_len, dtype=np.float32)
 
-def random_onehot(size):
-    """ Generate random one-hot encoding vector with given size. """
-    temp = np.zeros(size)
-    temp[np.random.randint(0, size)] = 1
-    return temp 
+    temp_A = Chem.rdmolops.GetAdjacencyMatrix(mol).astype(np.int8, copy=False)[:max_len, :max_len]
+    num_mol = temp_A.shape[0]
 
+    A[:num_mol, :num_mol] = temp_A + np.eye(temp_A.shape[0], dtype=np.int8)
+
+    for i, atom in enumerate(mol.GetAtoms()):
+        feature = atom_feature(atom)
+        X[i, :] = feature
+        P[i] = LIST_PROB[feature[0]]
+        if i + 1 >= num_mol: break
+    return X, A, P
 
 def normalize_adj(mx):
     """ Symmetry Normalization """
