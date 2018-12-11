@@ -8,6 +8,7 @@ COMET(Chemically Omnipotent Molecular Encoder from Transformer)
     
 - [ ] branch_v2_weighted_sampling_dataset_fixed_size_batch     
     - [X] Data : dataset consist more balanced molecule sample with more abundant rare symbol.  
+    - [ ] Data Set : Normalize molecular property with mean & std value. It is very fast with pandas operation.    
     - [ ] Data Set : It preprocess each molecule and hold their Adjacency Matrix and Feature Matrix. Also each molecule is parsed into fixed size vector.    
     - [ ] Data Loader : masking indices were selected based on the symbol distribution and return A, X, masked_A, masked_X, masked_idx, P  
     - [ ] Ground Truth : previous ground truth matrix is indexed inside the training iteration.  
@@ -23,14 +24,12 @@ COMET(Chemically Omnipotent Molecular Encoder from Transformer)
 # Dataset  
 Total Number of Molecules in Raw Zinc Dataset : 531,354,040
 
-|   Name   | Train Size | Train Coverage | Valid Size | Valid Coverage | Sampling Rate |
-|:--------:|-----------:|---------------:|-----------:|---------------:|--------------:|
-|  data_m  |   42507072 |                |   10627596 |                |               |
-|  data_ms |    4249706 |                |    1063365 |                |               |
-|  data_s  |    1998892 |                |     500701 |                |               |
-|  data_xs |     424115 |                |     107133 |                |               |
-| data_xxs |      99216 |                |      26058 |                |   0.000235245 |
-|   bal_s  |    1979256 |                |     495380 |                |     0.0047049 |
+|    Name   |        Train Size | Train Coverage |      Valid Size | Valid Coverage | Sampling Rate |
+|:---------:|------------------:|---------------:|----------------:|---------------:|--------------:|
+|  COMET_L  | 19.9M(19,919,005) |                | 4.9M(4,980,881) |                |               |
+|  COMET_M  |  5.9M (5,975,109) |                | 1.4M(1,494,480) |                |     0.0141147 |
+|  COMET_S  |  1.9M (1,979,256) |                | 0.5M  (495,380) |                |     0.0047049 |
+| COMET_XXS |  197K   (197,189) |                |  49K   (49,514) |                |    0.00047049 |
 
 # Reference  
 Register conda environment to jupyter notebook : https://stackoverflow.com/questions/39604271/conda-environments-not-showing-up-in-jupyter-notebook  

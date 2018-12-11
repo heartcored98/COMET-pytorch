@@ -173,11 +173,17 @@ class BatchSampler(Sampler):
 class zincDataset(Dataset):
     def __init__(self, data_path, skip_header=True):
         self.data = pd.read_csv(data_path)
-        # self.data = self.data.sort_values(by=['length'])
         self.data = self.data.reset_index()
-        self.data['mr'] = np.log10(self.data['mr'] + 1)
-        self.data['tpsa'] = np.log10(self.data['tpsa'] + 1)
-        self.data = self.data.to_dict('index')
+        # self.data = self.data.sort_values(by=['length'])
+
+        # Mean & Std Normalize of molecular property
+        self.data.logP = (self.data.logP - self.data.logP.mean()) / self.data.logP.std()
+        self.data.mr = np.log10(self.data.mr)
+        self.data.mr = (self.data.mr - self.data.mr.mean()) / self.data.mr.std()
+        self.data.tpsa= np.log10(self.data.tpsa)
+        self.data.tpsa = (self.data.tpsa - self.data.tpsa.mean()) / self.data.tpsa.std()
+
+        # self.data = self.data.to_dict('index')
 
     def __len__(self):
         return len(self.data)

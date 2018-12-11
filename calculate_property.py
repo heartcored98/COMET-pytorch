@@ -197,18 +197,18 @@ if __name__ == '__main__':
     # S : 0.0047049 -> 2M / 0.5M
     # XS : 0.0047049 * 0.3 -> 0.6M / 0.15M
     # XXS : 0.00047049 -> 0.2M / 0.05M
-    parser.add_argument("-q", "--sampling_rate", help="sampling rate", type=float, default=0.0047049)
+    parser.add_argument("-q", "--sampling_rate", help="sampling rate", type=float, default=0.047049)
 
     parser.add_argument("-c", "--chunk_size", help="number of rows in one chunk ", type=int, default=25000000)
-    parser.add_argument("-ts", "--temp_size", help="number of rows in one chunk ", type=int, default=50000)
+    parser.add_argument("-ts", "--temp_size", help="number of rows in one chunk ", type=int, default=50000000)
     parser.add_argument("-n", "--num_worker", help="number of co-working process", type=int, default=16)
     parser.add_argument("-r", "--test_size", help="portion of validation_set", type=float, default=0.2)
-    parser.add_argument("-t", "--flag_continue", help="whether continue writing file", type=bool, default=False)
+    parser.add_argument("-t", "--flag_continue", help="whether continue writing file", type=bool, default=True)
 
-    parser.add_argument("-s", "--start_offset", help="starting from i-th file in directory", type=int, default=0)
+    parser.add_argument("-s", "--start_offset", help="starting from i-th file in directory", type=int, default=1765)
     parser.add_argument("-e", "--end_offset", help="end processing at i-th file in directory", type=int, default=-1)
     parser.add_argument("-d", "--raw_dir_path", help="directory where dataset stored", type=str, default='./raw_zinc_smiles')
-    parser.add_argument("-o", "--output_dir_path", help="directory where processed data saved", type=str, default='./dataset/bal_s')
+    parser.add_argument("-o", "--output_dir_path", help="directory where processed data saved", type=str, default='./dataset/bal_L')
 
     args = parser.parse_args()
 
