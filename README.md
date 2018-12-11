@@ -26,10 +26,10 @@ Total Number of Molecules in Raw Zinc Dataset : 531,354,040
 
 |    Name   |        Train Size | Train Coverage |      Valid Size | Valid Coverage | Sampling Rate |
 |:---------:|------------------:|---------------:|----------------:|---------------:|--------------:|
-|  COMET_L  | 19.9M(19,919,005) |                | 4.9M(4,980,881) |                |               |
-|  COMET_M  |  5.9M (5,975,109) |                | 1.4M(1,494,480) |                |     0.0141147 |
-|  COMET_S  |  1.9M (1,979,256) |                | 0.5M  (495,380) |                |     0.0047049 |
-| COMET_XXS |  197K   (197,189) |                |  49K   (49,514) |                |    0.00047049 |
+|  COMET_L  | 19.9M(19,919,005) |                | 4.9M(4,980,881) |                |          4.7% |
+|  COMET_M  |  5.9M (5,975,109) |                | 1.4M(1,494,480) |                |          1.4% |
+|  COMET_S  |  1.9M (1,979,256) |                | 0.5M  (495,380) |                |         0.47% |
+| COMET_XXS |  197K   (197,189) |                |  49K   (49,514) |                |        0.047% |
 
 # Reference  
 Register conda environment to jupyter notebook : https://stackoverflow.com/questions/39604271/conda-environments-not-showing-up-in-jupyter-notebook  
