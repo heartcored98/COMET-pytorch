@@ -6,12 +6,13 @@ COMET(Chemically Omnipotent Molecular Encoder from Transformer)
     - [X] Data Loader : data loader sampling masking atom based on their inverse occurence probability  
     - [X] Logging : record macro f1 score, confusion matrix, weight histogram  
     
-- [ ] branch_v2_weighted_sampling_dataset_fixed_size_batch    
-    - [ ] Data : dataset consist more balanced molecule sample with more abundant rare symbol.  
-    - [ ] Data Set : It preprocess each molecule and hold their Adjacency Matrix and Feature Matrix. Also each molecule is parsed into fixed size vector.    
-    - [ ] Data Loader : masking indices were selected based on the symbol distribution and return A, X, masked_A, masked_X, masked_idx, P  
-    - [ ] Ground Truth : previous ground truth matrix is indexed inside the training iteration.  
-    - [ ] Loss : weighted cross-entropy loss applied.  
+- [X] branch_v2_weighted_sampling_dataset_fixed_size_batch     
+    - [X] Data : dataset consist more balanced molecule sample with more abundant rare symbol.  
+    - [X] Data Set : Normalize molecular property with mean & std value. It is very fast with pandas operation.    
+    - [X] Data Set : It preprocess each molecule and hold their Adjacency Matrix and Feature Matrix. Also each molecule is parsed into fixed size vector.    
+    - [X] Inside Iteration : masking indices were selected based on the symbol distribution and return A, X, masked_A, masked_X, masked_idx, P  
+    - [X] Ground Truth : previous ground truth matrix is indexed inside the training iteration.  
+    - [ ] ~~Loss : weighted cross-entropy loss applied.~~  
      
 - [ ] branch_v3_radius_masking_dataloader  
     - [ ] Data Loader : Firstly sampling center atom with occurence distribution. Secondly, it find out adjacent atom by multiplying A matrix with r(radius) times. Construct index set and truncate with num_masking  
@@ -19,6 +20,16 @@ COMET(Chemically Omnipotent Molecular Encoder from Transformer)
 - [ ] branch_v4_adj_masking_dataloader  
     - [ ] Data Loader : Masked A would provide  
     - [ ] Model : A should be calculate from previous A.   
+    
+# Dataset  
+Total Number of Molecules in Raw Zinc Dataset : 531,354,040
+
+|    Name   |        Train Size | Train Coverage |      Valid Size | Valid Coverage | Sampling Rate |
+|:---------:|------------------:|---------------:|----------------:|---------------:|--------------:|
+|  COMET_L  | 19.9M(19,919,005) |                | 4.9M(4,980,881) |                |          4.7% |
+|  COMET_M  |  5.9M (5,975,109) |                | 1.4M(1,494,480) |                |          1.4% |
+|  COMET_S  |  1.9M (1,979,256) |                | 0.5M  (495,380) |                |         0.47% |
+| COMET_XXS |  197K   (197,189) |                |  49K   (49,514) |                |        0.047% |
 
 # Reference  
 Register conda environment to jupyter notebook : https://stackoverflow.com/questions/39604271/conda-environments-not-showing-up-in-jupyter-notebook  
