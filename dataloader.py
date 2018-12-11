@@ -29,6 +29,10 @@ LIST_PROB = [2.3993241881917855e-05, 8.444776409026159e-09, 5.054594488705504e-0
              0.034482758620689655, 0.034482758620689655, 0.034482758620689655, 0.034482758620689655,
              0.034482758620689655]
 
+LOGP_MEAN, LOGP_STD = 3.0475299537604004, 1.4508318866361838
+MR_MEAN, MR_STD = 1.983070758071883, 0.07702976853699765
+TPSA_MEAN, TPSA_STD = 1.8082864863018322, 0.1832254436608209
+
 
 def atom_feature(atom):
     return np.array(char_to_ix(atom.GetSymbol(), LIST_SYMBOLS) +
@@ -177,11 +181,11 @@ class zincDataset(Dataset):
         # self.data = self.data.sort_values(by=['length'])
 
         # Mean & Std Normalize of molecular property
-        self.data.logP = (self.data.logP - self.data.logP.mean()) / self.data.logP.std()
-        self.data.mr = np.log10(self.data.mr)
-        self.data.mr = (self.data.mr - self.data.mr.mean()) / self.data.mr.std()
-        self.data.tpsa= np.log10(self.data.tpsa)
-        self.data.tpsa = (self.data.tpsa - self.data.tpsa.mean()) / self.data.tpsa.std()
+        self.data.logP = (self.data.logP - LOGP_MEAN) / LOGP_STD
+        self.data.mr = np.log10(self.data.mr + 1)
+        self.data.mr = (self.data.mr - MR_MEAN) / MR_STD
+        self.data.tpsa= np.log10(self.data.tpsa + 1)
+        self.data.tpsa = (self.data.tpsa - TPSA_MEAN) / TPSA_STD
 
         # self.data = self.data.to_dict('index')
 

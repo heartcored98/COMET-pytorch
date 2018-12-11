@@ -8,7 +8,7 @@ COMET(Chemically Omnipotent Molecular Encoder from Transformer)
     
 - [ ] branch_v2_weighted_sampling_dataset_fixed_size_batch     
     - [X] Data : dataset consist more balanced molecule sample with more abundant rare symbol.  
-    - [ ] Data Set : Normalize molecular property with mean & std value. It is very fast with pandas operation.    
+    - [X] Data Set : Normalize molecular property with mean & std value. It is very fast with pandas operation.    
     - [ ] Data Set : It preprocess each molecule and hold their Adjacency Matrix and Feature Matrix. Also each molecule is parsed into fixed size vector.    
     - [ ] Data Loader : masking indices were selected based on the symbol distribution and return A, X, masked_A, masked_X, masked_idx, P  
     - [ ] Ground Truth : previous ground truth matrix is indexed inside the training iteration.  
