@@ -441,13 +441,13 @@ if __name__ == '__main__':
     parser.add_argument("-nw", "--num_workers", type=int, default=12)
 
     # ===== Logging =====#
-    parser.add_argument("-li", "--log_every", type=int, default= 5 * 10)  # Test: 10  #Default 40*10
-    parser.add_argument("-vi", "--validate_every", type=int, default= 1000)  # Test:50 #Default 40*50
-    parser.add_argument("-si", "--save_every", type=int, default= 1000)  # Test:50 #Default 40*100
+    parser.add_argument("-li", "--log_every", type=int, default= 10)  # Test: 10  #Default 40*10
+    parser.add_argument("-vi", "--validate_every", type=int, default= 20)  # Test:50 #Default 40*50
+    parser.add_argument("-si", "--save_every", type=int, default= 100)  # Test:50 #Default 40*100
 
     parser.add_argument("-mn", "--model_name", type=str, required=True)
     parser.add_argument("--log_path", type=str, default='runs')
-    parser.add_argument("--ck_filename", type=str, default=None) #'model_4_256_xs_basic_000_000000300.tar')
+    parser.add_argument("--ck_filename", type=str, default='small_model_speed_test_000_000000180.tar')
     parser.add_argument("--dataset_path", type=str, default='./dataset/bal_xxs')
 
     args = parser.parse_args()#["-mn", "metric_test_0.5_masking"])
