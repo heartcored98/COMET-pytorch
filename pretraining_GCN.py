@@ -108,7 +108,7 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
                 torch.cuda.empty_cache()
 
             t4 = time.time()
-            print("total {:2.2f}. Prepare {:2.2f}. Mask {:2.2f}. Aux {:2.2f}".format(t4-t1, t2-t1, t3-t2, t4-t3))
+            # print("total {:2.2f}. Prepare {:2.2f}. Mask {:2.2f}. Aux {:2.2f}".format(t4-t1, t2-t1, t3-t2, t4-t3))
             cnt_iter += 1
             setattr(args, 'epoch_now', epoch)
             setattr(args, 'iter_now', cnt_iter)
@@ -124,7 +124,7 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
                 if len(args.aux_task) > 0:
                     train_writer.add_scalar('1.status/auxiliary', auxiliary_loss, cnt_iter)
                     for i, task in enumerate(args.aux_task):
-                        train_writer.add_scalar('3.auxiliary/{}'.format(task), list_loss[i], cnt_iter)
+                        train_writer.add_scalar('3.auxiliary_loss/{}'.format(task), list_loss[i], cnt_iter)
 
                 output = "[TRAIN] E:{:3}. P:{:>2.1f}%. Loss:{:>9.3}. Mask Loss:{:>9.3}. {:4.1f} mol/sec. Iter:{:6}.  Elapsed:{:6.1f} sec."
                 elapsed = time.time() - t
@@ -428,7 +428,7 @@ if __name__ == '__main__':
     parser.add_argument("-ls", "--lr_step", type=int, default=4000)
 
     # ===== Training =====#
-    parser.add_argument("-aux", "--aux_task", nargs='+', default=['logP', 'mr']) #, 'tpsa'])
+    parser.add_argument("-aux", "--aux_task", nargs='+', default=['logP', 'mr', 'tpsa'])
     parser.add_argument("-mr", "--masking_rate", type=float, default=0.2)
     parser.add_argument("-R", "--radius", type=int, default=2)
     parser.add_argument("-er", "--erase_rate", type=float, default=0.8)
@@ -441,14 +441,14 @@ if __name__ == '__main__':
     parser.add_argument("-nw", "--num_workers", type=int, default=12)
 
     # ===== Logging =====#
-    parser.add_argument("-li", "--log_every", type=int, default= 10)  # Test: 10  #Default 40*10
-    parser.add_argument("-vi", "--validate_every", type=int, default= 20)  # Test:50 #Default 40*50
-    parser.add_argument("-si", "--save_every", type=int, default= 100)  # Test:50 #Default 40*100
+    parser.add_argument("-li", "--log_every", type=int, default= 20)  # Test: 10  #Default 40*10
+    parser.add_argument("-vi", "--validate_every", type=int, default= 1000)  # Test:50 #Default 40*50
+    parser.add_argument("-si", "--save_every", type=int, default= 1000)  # Test:50 #Default 40*100
 
     parser.add_argument("-mn", "--model_name", type=str, required=True)
     parser.add_argument("--log_path", type=str, default='runs')
-    parser.add_argument("--ck_filename", type=str, default='small_model_speed_test_000_000000180.tar')
-    parser.add_argument("--dataset_path", type=str, default='./dataset/bal_xxs')
+    parser.add_argument("--ck_filename", type=str, default=None) #'small_model_speed_test_000_000000180.tar')
+    parser.add_argument("--dataset_path", type=str, default='./dataset/bal_s')
 
     args = parser.parse_args()#["-mn", "metric_test_0.5_masking"])
 

@@ -4,7 +4,6 @@ import multiprocessing as mp
 
 import torch
 from torch.utils.data import Dataset, DataLoader
-from torch._six import int_classes as _int_classes
 from rdkit import Chem
 from scipy.linalg import fractional_matrix_power
 import numpy as np
@@ -14,11 +13,10 @@ import pandas as pd
 from utils import get_dir_files
 
 
-
 MASKING_RATE = 0
 ERASE_RATE = 0
-MAX_LEN = 0
 RADIUS = 0
+MAX_LEN = 50
 
 LIST_SYMBOLS = ['C', 'N', 'O', 'S', 'F', 'H', 'Si', 'P', 'Cl', 'Br',
                 'Li', 'Na', 'K', 'Mg', 'Ca', 'Fe', 'As', 'Al', 'I', 'B',
@@ -99,6 +97,14 @@ def postprocess_batch(mini_batch):
     idx_2 = np.tile(idx_2, (num_masking, 1)).T.flatten()
     mask_X = np.copy(X)
     mask_X[idx_2, masking_idx.flatten(), :] = 0
+
+    de = A.sum(axis=2)[:, np.newaxis]
+    de[de <= 0] = 1
+    A = A / de
+
+    torch.Tensor(predict_idx).long()
+
+    # return predict_idx, X, mask_X, true_X, A, C
     return torch.Tensor(predict_idx).long(), torch.Tensor(X).long(), torch.Tensor(mask_X).long(), torch.Tensor(true_X).long(), torch.Tensor(A).float(), torch.Tensor(C).float()
 
 
@@ -202,7 +208,8 @@ class zincDataset(Dataset):
             print("Molecular Property Normalization Complete!")
 
             # Get Property Matrix
-            self.C = self.data[['logP', 'mr', 'tpsa', 'sa']].values
+            # self.C = self.data[['logP', 'mr', 'tpsa', 'sa']].values
+            self.C = self.data[['logP', 'mr', 'tpsa']].values
             smiles = self.data.smile.values
             del self.data
 
