@@ -13,12 +13,13 @@ COMET(Chemically Omnipotent Molecular Encoder from Transformer)
     - [X] Inside Iteration : masking indices were selected based on the symbol distribution and return A, X, masked_A, masked_X, masked_idx, P  
     - [X] Ground Truth : previous ground truth matrix is indexed inside the training iteration.  
     - [ ] ~~Loss : weighted cross-entropy loss applied.~~  
-    - [ ] Put Masking Task in Batch_process fn
+    - [X] Put Masking Task in Batch_process fn
     - [ ] Normalize A matrix in dataloader or iteration (Note. masked A should be generate from the Normalized A)
     - [ ] Crop A matrix with max-atom length in order to increase speed
+    - [ ] Auxilary Regression is done in one time
      
 - [ ] branch_v3_radius_masking_dataloader  
-    - [ ] Data Loader : Firstly sampling center atom with occurence distribution. Secondly, it find out adjacent atom by multiplying A matrix with r(radius) times. Construct index set and truncate with num_masking  
+    - [X] Data Loader : Firstly sampling center atom with occurence distribution. Secondly, it find out adjacent atom by multiplying A matrix with r(radius) times. Construct index set and truncate with num_masking  
     
 - [ ] branch_v4_adj_masking_dataloader  
     - [ ] Data Loader : Masked A would provide  
