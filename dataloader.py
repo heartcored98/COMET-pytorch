@@ -4,6 +4,8 @@ import multiprocessing as mp
 
 import torch
 from torch.utils.data import Dataset, DataLoader
+from torch._six import int_classes as _int_classes
+from torch.utils.data.sampler import Sampler, SequentialSampler
 from rdkit import Chem
 from scipy.linalg import fractional_matrix_power
 import numpy as np
@@ -13,9 +15,9 @@ import pandas as pd
 from utils import get_dir_files
 
 
-MASKING_RATE = 0
-ERASE_RATE = 0
-RADIUS = 0
+MASKING_RATE = 0.3
+ERASE_RATE = 0.8
+RADIUS = 2
 MAX_LEN = 50
 
 LIST_SYMBOLS = ['C', 'N', 'O', 'S', 'F', 'H', 'Si', 'P', 'Cl', 'Br',
@@ -69,10 +71,15 @@ def postprocess_batch(mini_batch):
     max_len = MAX_LEN
     radius = RADIUS
 
-    X, A, C, P = list(zip(*mini_batch))
-    X, A, C, P = np.array(X), np.array(A), np.array(C), np.array(P)
+    X, A, C, P, L = list(zip(*mini_batch))
+    X, A, C, P, L = np.array(X), np.array(A), np.array(C), np.array(P), np.array(L)
 
     batch_size = len(mini_batch)
+    max_len = min(np.max(L), max_len)
+
+    X = X[:, :max_len, :]
+    A = A[:, :max_len, :max_len]
+    P = P[:, :max_len]
     num_masking = int(masking_rate * max_len)
 
     # Sampling Masking Center Atom
@@ -102,9 +109,6 @@ def postprocess_batch(mini_batch):
     de[de <= 0] = 1
     A = A / de
 
-    torch.Tensor(predict_idx).long()
-
-    # return predict_idx, X, mask_X, true_X, A, C
     return torch.Tensor(predict_idx).long(), torch.Tensor(X).long(), torch.Tensor(mask_X).long(), torch.Tensor(true_X).long(), torch.Tensor(A).float(), torch.Tensor(C).float()
 
 
@@ -174,6 +178,44 @@ def preprocess_df(smiles, num_worker):
     return X, A, P
 
 
+class BatchSampler(Sampler):
+
+    def __init__(self, sampler, batch_size, drop_last=False, shuffle_batch=False):
+
+        if not isinstance(batch_size, _int_classes) or isinstance(batch_size, bool) or batch_size <= 0:
+            raise ValueError("batch_size should be a positive integeral value, "
+                             "but got batch_size={}".format(batch_size))
+        if not isinstance(drop_last, bool):
+            raise ValueError("drop_last should be a boolean value, but got "
+                             "drop_last={}".format(drop_last))
+        self.sampler = sampler
+        self.batch_size = batch_size
+        self.drop_last = drop_last
+        self.shuffle_batch = shuffle_batch
+
+    def __iter__(self):
+        batch = list()
+        mini_batch = list()
+        for idx in self.sampler:
+            mini_batch.append(idx)
+            if len(mini_batch) == self.batch_size:
+                batch.append(mini_batch)
+                mini_batch = []
+        if len(mini_batch) > 0 and not self.drop_last:
+            batch.append(mini_batch)
+
+        if self.shuffle_batch:
+            return iter(np.random.permutation(batch))
+        else:
+            return iter(batch)
+
+    def __len__(self):
+        if self.drop_last:
+            return len(self.sampler) // self.batch_size
+        else:
+            return (len(self.sampler) + self.batch_size - 1) // self.batch_size
+
+
 class zincDataset(Dataset):
     def __init__(self, data_path, filename, num_worker, save_cache=True, labels=['logP', 'mr', 'tpsa']):
         # Make Label Index
@@ -190,6 +232,7 @@ class zincDataset(Dataset):
             self.A = temp['A']
             self.C = temp['C']
             self.P = temp['P']
+            self.L = temp['L']
             print("Loading Preprocessed Data Complete!".format(cache_name))
 
         else:
@@ -210,6 +253,7 @@ class zincDataset(Dataset):
             # Get Property Matrix
             # self.C = self.data[['logP', 'mr', 'tpsa', 'sa']].values
             self.C = self.data[['logP', 'mr', 'tpsa']].values
+            self.L = self.data['length']
             smiles = self.data.smile.values
             del self.data
 
@@ -222,7 +266,7 @@ class zincDataset(Dataset):
             # Save Preprocessed Data
             if save_cache:
                 print("Saving Preprocessed Data to {}...".format(cache_name))
-                np.savez_compressed(join(data_path, filename), X=self.X, A=self.A, C=self.C, P=self.P)
+                np.savez_compressed(join(data_path, filename), X=self.X, A=self.A, C=self.C, P=self.P, L=self.L)
                 print("Saving Preprocessed Data Complete!")
 
     def __len__(self):
@@ -233,7 +277,8 @@ class zincDataset(Dataset):
         A = self.A[index]
         C = self.C[index, self.label_idx]
         P = self.P[index]
-        return X, A, C, P
+        L = self.L[index]
+        return X, A, C, P, L
 
 
 if __name__ == '__main__':

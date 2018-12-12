@@ -437,7 +437,7 @@ if __name__ == '__main__':
 
     parser.add_argument("-ep", "--epoch", type=int, default=100)
     parser.add_argument("-bs", "--batch_size", type=int, default=1024)
-    parser.add_argument("-tbs", "--test_batch_size", type=int, default=1024)
+    parser.add_argument("-tbs", "--test_batch_size", type=int, default=2048)
     parser.add_argument("-nw", "--num_workers", type=int, default=12)
 
     # ===== Logging =====#
@@ -474,21 +474,21 @@ if __name__ == '__main__':
 
     logger.info("##### Loading Train Dataloader #####")
     train_dataset = zincDataset(train_dataset_path, list_trains[0], args.num_workers, labels=args.aux_task)
+    sampler = SequentialSampler(train_dataset)
+    SortedBatchSampler = BatchSampler(sampler=sampler, batch_size=args.batch_size, drop_last=True, shuffle_batch=True)
     train_dataloader = DataLoader(train_dataset,
-                                  batch_size=args.batch_size,
-                                  drop_last=True,
                                   num_workers=args.num_workers,
-                                  shuffle=True,
-                                  collate_fn=postprocess_batch)
+                                  collate_fn=postprocess_batch,
+                                  batch_sampler=SortedBatchSampler)
 
     logger.info("##### Loading Validation Dataloader #####")
     val_dataset = zincDataset(val_dataset_path, list_vals[0], args.num_workers, labels=args.aux_task)
+    sampler = SequentialSampler(val_dataset)
+    SortedBatchSampler = BatchSampler(sampler=sampler, batch_size=args.test_batch_size, drop_last=True, shuffle_batch=False)
     val_dataloader = DataLoader(val_dataset,
-                                batch_size=args.test_batch_size,
-                                drop_last=True,
                                 num_workers=args.num_workers,
-                                shuffle=False,
-                                collate_fn=postprocess_batch)
+                                collate_fn=postprocess_batch,
+                                batch_sampler=SortedBatchSampler)
 
     dataloader = {'train': train_dataloader, 'val': val_dataloader}
     logger.info("######## Starting Training ########")
