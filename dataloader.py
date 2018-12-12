@@ -170,6 +170,9 @@ def preprocess_df(smiles, num_worker):
 
 class zincDataset(Dataset):
     def __init__(self, data_path, filename, num_worker, save_cache=True, labels=['logP', 'mr', 'tpsa']):
+        # Make Label Index
+        label2idx = {'logP':0, 'mr':1, 'tpsa':2, 'sa':3}
+        self.label_idx = np.array([label2idx[label] for label in labels])
 
         # Find whether cache is exist
         files = get_dir_files(data_path)
@@ -199,7 +202,7 @@ class zincDataset(Dataset):
             print("Molecular Property Normalization Complete!")
 
             # Get Property Matrix
-            self.C = self.data[labels].values
+            self.C = self.data[['logP', 'mr', 'tpsa', 'sa']].values
             smiles = self.data.smile.values
             del self.data
 
@@ -221,7 +224,7 @@ class zincDataset(Dataset):
     def __getitem__(self, index):
         X = self.X[index]
         A = self.A[index]
-        C = self.C[index]
+        C = self.C[index, self.label_idx]
         P = self.P[index]
         return X, A, C, P
 

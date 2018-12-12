@@ -270,12 +270,12 @@ class Classifier(nn.Module):
 
 
 class Regressor(nn.Module):
-    def __init__(self, molvec_dim, dropout_rate=0.1, act=ACT2FN['relu']):
+    def __init__(self, molvec_dim, num_aux_task, dropout_rate=0.1, act=ACT2FN['relu']):
         super(Regressor, self).__init__()
 
         self.molvec_dim = molvec_dim
         self.reg_fc1 = nn.Linear(self.molvec_dim, self.molvec_dim // 2)
-        self.reg_fc2 = nn.Linear(self.molvec_dim // 2, 1)
+        self.reg_fc2 = nn.Linear(self.molvec_dim // 2, num_aux_task)
         self.bn1 = nn.BatchNorm1d(self.molvec_dim // 2)
         self.dropout = nn.Dropout(p=dropout_rate)
         self.act = act
