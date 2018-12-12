@@ -17,7 +17,8 @@ from utils import get_dir_files
 
 MASKING_RATE = 0
 ERASE_RATE = 0
-MAX_LEN = 50
+MAX_LEN = 0
+RADIUS = 0
 
 LIST_SYMBOLS = ['C', 'N', 'O', 'S', 'F', 'H', 'Si', 'P', 'Cl', 'Br',
                 'Li', 'Na', 'K', 'Mg', 'Ca', 'Fe', 'As', 'Al', 'I', 'B',
@@ -65,18 +66,16 @@ def normalize_adj(mx):
 
 def postprocess_batch(mini_batch):
     # Assign masking and erase rate from global variables
-    masking_rate = 0.15
-    erase_rate = 0.8
-    max_len = 50
-    radius = 2
+    masking_rate = MASKING_RATE
+    erase_rate = ERASE_RATE
+    max_len = MAX_LEN
+    radius = RADIUS
 
     X, A, C, P = list(zip(*mini_batch))
     X, A, C, P = np.array(X), np.array(A), np.array(C), np.array(P)
 
     batch_size = len(mini_batch)
     num_masking = int(masking_rate * max_len)
-
-    #############################################################
 
     # Sampling Masking Center Atom
     center_idx = np.zeros(batch_size, dtype=np.uint8)
