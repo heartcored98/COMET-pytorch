@@ -67,6 +67,9 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
 
             # Get Batch Sample from DataLoader
             num_masking = int(args.masking_rate * args.max_len)
+            predict_idx, X, mask_X, true_X, A, C = batch
+
+            """
             X, A, C, P = batch
 
             # Sampling Masking Center Atom
@@ -93,7 +96,7 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
             idx_2 = torch.LongTensor(idx_2).unsqueeze(1).view(idx_2.shape[0], -1).expand(-1, num_masking).flatten()
             mask_X = torch.clone(X)
             mask_X[idx_2, masking_idx.flatten(), :] = 0
-
+            """
             # Normalize A matrix in order to prevent overflow
 
             # Convert Tensor into Variable and Move to CUDA
@@ -240,35 +243,7 @@ def validate(models, data_loader, args, **kwargs):
     with torch.no_grad():
         for batch_idx, batch in enumerate(data_loader):
             # Get Batch Sample from DataLoader
-            num_masking = int(args.masking_rate * args.max_len)
-            X, A, C, P = batch
-
-            # Sampling Masking Center Atom
-            center_idx = np.zeros(args.batch_size, dtype=np.uint8)
-            for i, p_row in enumerate(P.numpy()):
-                center_idx[i] = np.random.choice(np.array(args.max_len), 1, p=p_row)
-            radius_A = torch.matrix_power(A.float(), args.radius)
-
-            # Find Out which atom is connected to the center atom
-            adjacent_A = torch.stack([adj[center_idx[i]] for i, adj in enumerate(radius_A)]) + 1e-6
-            predict_idx = np.zeros((args.batch_size, num_masking), dtype=np.uint8)
-            for i, p_row in enumerate(adjacent_A.numpy()):
-                predict_idx[i] = np.random.choice(np.array(args.max_len), num_masking, p=p_row / p_row.sum(),
-                                                  replace=False)
-
-            # Get Target True X
-            predict_idx = torch.Tensor(predict_idx).long()
-            idx_1 = torch.LongTensor(range(args.batch_size)).unsqueeze(1).view(args.batch_size, -1).expand(-1, num_masking).flatten()
-            true_X = X[idx_1, predict_idx.flatten(), :]
-
-            # Get Input Masked X
-            idx_2 = np.random.choice(np.array(args.batch_size), int(args.batch_size * args.erase_rate), replace=False)
-            masking_idx = predict_idx[idx_2]
-            idx_2 = torch.LongTensor(idx_2).unsqueeze(1).view(idx_2.shape[0], -1).expand(-1, num_masking).flatten()
-            mask_X = torch.clone(X)
-            mask_X[idx_2, masking_idx.flatten(), :] = 0
-
-            # Normalize A matrix in order to prevent overflow
+            predict_idx, X, mask_X, true_X, A, C = batch
 
             # Convert Tensor into Variable and Move to CUDA
             mask_idx = Variable(predict_idx).to(args.device).long()
@@ -475,7 +450,7 @@ def experiment(dataloader, args):
     optimizers = {'mask':mask_optimizer, 'auxiliary':auxiliary_optimizer}
 
     # Train Model
-    validate(models, dataloader['val'], args, cnt_iter=cnt_iter, epoch=epoch)
+    # validate(models, dataloader['val'], args, cnt_iter=cnt_iter, epoch=epoch)
     train(models, optimizers, dataloader, epoch, cnt_iter, args)
 
     # Logging Experiment Result
@@ -566,7 +541,8 @@ if __name__ == '__main__':
                                   batch_size=args.batch_size,
                                   drop_last=True,
                                   num_workers=args.num_workers,
-                                  shuffle=True)
+                                  shuffle=True,
+                                  collate_fn=postprocess_batch)
 
     logger.info("##### Loading Validation Dataloader #####")
     val_dataset = zincDataset(val_dataset_path, list_vals[0], args.num_workers)
@@ -574,7 +550,8 @@ if __name__ == '__main__':
                                 batch_size=args.test_batch_size,
                                 drop_last=True,
                                 num_workers=args.num_workers,
-                                shuffle=False)
+                                shuffle=False,
+                                collate_fn=postprocess_batch)
 
     dataloader = {'train': train_dataloader, 'val': val_dataloader}
     logger.info("######## Starting Training ########")

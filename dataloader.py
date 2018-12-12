@@ -2,11 +2,13 @@
 from os.path import join
 import multiprocessing as mp
 
+import torch
 from torch.utils.data import Dataset, DataLoader
 from torch._six import int_classes as _int_classes
 from rdkit import Chem
 from scipy.linalg import fractional_matrix_power
 import numpy as np
+from numpy.linalg import matrix_power
 import pandas as pd
 
 from utils import get_dir_files
@@ -59,6 +61,46 @@ def normalize_adj(mx):
     r_inv = fractional_matrix_power(rowsum, -0.5)
     r_inv[np.isinf(r_inv)] = 0.
     return r_inv.dot(mx).dot(r_inv)
+
+
+def postprocess_batch(mini_batch):
+    # Assign masking and erase rate from global variables
+    masking_rate = 0.15
+    erase_rate = 0.8
+    max_len = 50
+    radius = 2
+
+    X, A, C, P = list(zip(*mini_batch))
+    X, A, C, P = np.array(X), np.array(A), np.array(C), np.array(P)
+
+    batch_size = len(mini_batch)
+    num_masking = int(masking_rate * max_len)
+
+    #############################################################
+
+    # Sampling Masking Center Atom
+    center_idx = np.zeros(batch_size, dtype=np.uint8)
+    for i, p_row in enumerate(P):
+        center_idx[i] = np.random.choice(np.array(max_len), 1, p=p_row)
+    radius_A = matrix_power(A, radius)
+
+    # Find Out which atom is connected to the center atom
+    adjacent_A = np.stack([adj[center_idx[i]] for i, adj in enumerate(radius_A)]) + 1e-6
+    predict_idx = np.zeros((batch_size, num_masking), dtype=np.uint8)
+    for i, p_row in enumerate(adjacent_A):
+        predict_idx[i] = np.random.choice(np.array(max_len), num_masking, p=p_row / p_row.sum(), replace=False)
+
+    # Get Target True X
+    idx_1 = np.tile(np.arange(batch_size), (num_masking, 1)).T.flatten()
+    true_X = X[idx_1, predict_idx.flatten(), :]
+
+    # Get Input Masked X
+    idx_2 = np.random.choice(np.array(batch_size), int(batch_size * erase_rate), replace=False)
+    masking_idx = predict_idx[idx_2]
+    idx_2 = np.tile(idx_2, (num_masking, 1)).T.flatten()
+    mask_X = np.copy(X)
+    mask_X[idx_2, masking_idx.flatten(), :] = 0
+    return torch.Tensor(predict_idx).long(), torch.Tensor(X).long(), torch.Tensor(mask_X).long(), torch.Tensor(true_X).long(), torch.Tensor(A).float(), torch.Tensor(C).float()
 
 
 def masking_feature(feature, num_masking, erase_rate, list_prob):
