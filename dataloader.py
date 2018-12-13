@@ -15,10 +15,13 @@ import pandas as pd
 from utils import get_dir_files
 
 
-MASKING_RATE = 0.3
+MASKING_RATE = {1:0.1, 2:0.212, 3:0.32, 4:0.42, 5:0.51, 6:0.6, 7:0.68}
 ERASE_RATE = 0.8
-RADIUS = 2
+RADIUS = 3
 MAX_LEN = 50
+
+
+list_num_atom = []
 
 LIST_SYMBOLS = ['C', 'N', 'O', 'S', 'F', 'H', 'Si', 'P', 'Cl', 'Br',
                 'Li', 'Na', 'K', 'Mg', 'Ca', 'Fe', 'As', 'Al', 'I', 'B',
@@ -66,14 +69,13 @@ def normalize_adj(mx):
 
 def postprocess_batch(mini_batch):
     # Assign masking and erase rate from global variables
-    masking_rate = MASKING_RATE
+    masking_rate = MASKING_RATE[RADIUS] #Select appropriate masking rate for given radius
     erase_rate = ERASE_RATE
     max_len = MAX_LEN
     radius = RADIUS
 
     X, A, C, P, L = list(zip(*mini_batch))
     X, A, C, P, L = np.array(X), np.array(A), np.array(C), np.array(P), np.array(L)
-
     batch_size = len(mini_batch)
     max_len = min(np.max(L), max_len)
 
@@ -90,6 +92,9 @@ def postprocess_batch(mini_batch):
 
     # Find Out which atom is connected to the center atom
     adjacent_A = np.stack([adj[center_idx[i]] for i, adj in enumerate(radius_A)]) + 1e-6
+    a = np.where(adjacent_A > 1e-5)
+    num_atom  = a[0].shape[0] / adjacent_A.shape[0]
+
     predict_idx = np.zeros((batch_size, num_masking), dtype=np.uint8)
     for i, p_row in enumerate(adjacent_A):
         predict_idx[i] = np.random.choice(np.array(max_len), num_masking, p=p_row / p_row.sum(), replace=False)
@@ -109,7 +114,7 @@ def postprocess_batch(mini_batch):
     de[de <= 0] = 1
     A = A / de
 
-    return torch.Tensor(predict_idx).long(), torch.Tensor(X).long(), torch.Tensor(mask_X).long(), torch.Tensor(true_X).long(), torch.Tensor(A).float(), torch.Tensor(C).float()
+    return torch.Tensor(predict_idx).long(), torch.Tensor(X).long(), torch.Tensor(mask_X).long(), torch.Tensor(true_X).long(), torch.Tensor(A).float(), torch.Tensor(C).float(), num_masking
 
 
 def masking_feature(feature, num_masking, erase_rate, list_prob):

@@ -17,6 +17,7 @@ COMET(Chemically Omnipotent Molecular Encoder from Transformer)
     - [X] Normalize A matrix in dataloader or iteration (Note. masked A should be generate from the Normalized A)
     - [X] Crop A matrix with max-atom length in order to increase speed
     - [X] Auxilary Regression is done in one time
+    - [X] Masking Rate is adjusted with given Masking Radius. Avg num_masking get close to Avg connected num_atom
      
 - [X] branch_v3_radius_masking_dataloader  
     - [X] Data Loader : Firstly sampling center atom with occurence distribution. Secondly, it find out adjacent atom by multiplying A matrix with r(radius) times. Construct index set and truncate with num_masking  

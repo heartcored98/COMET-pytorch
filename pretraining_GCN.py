@@ -453,7 +453,6 @@ if __name__ == '__main__':
     args = parser.parse_args()#["-mn", "metric_test_0.5_masking"])
 
     # ===== Experiment Setup =====#
-    dataloader.MASKING_RATE = args.masking_rate
     dataloader.ERASE_RATE = args.erase_rate
     dataloader.MAX_LEN = args.max_len
     dataloader.RADIUS = args.radius
