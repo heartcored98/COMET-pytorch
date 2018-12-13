@@ -424,7 +424,7 @@ if __name__ == '__main__':
 
     # ===== Optimizer =====#
     parser.add_argument("-u", "--optim", type=str, default='ADAM')
-    parser.add_argument("-lf", "--lr_factor", type=float, default=2.0)
+    parser.add_argument("-lf", "--lr_factor", type=float, default=1.0)
     parser.add_argument("-ls", "--lr_step", type=int, default=4000)
 
     # ===== Training =====#
@@ -442,8 +442,8 @@ if __name__ == '__main__':
 
     # ===== Logging =====#
     parser.add_argument("-li", "--log_every", type=int, default= 20)  # Test: 10  #Default 40*10
-    parser.add_argument("-vi", "--validate_every", type=int, default= 1000)  # Test:50 #Default 40*50
-    parser.add_argument("-si", "--save_every", type=int, default= 1000)  # Test:50 #Default 40*100
+    parser.add_argument("-vi", "--validate_every", type=int, default= 250)  # Test:50 #Default 40*50
+    parser.add_argument("-si", "--save_every", type=int, default= 250)  # Test:50 #Default 40*100
 
     parser.add_argument("-mn", "--model_name", type=str, required=True)
     parser.add_argument("--log_path", type=str, default='runs')
