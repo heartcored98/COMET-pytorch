@@ -12,7 +12,6 @@ COMET(Chemically Omnipotent Molecular Encoder from Transformer)
     - [X] Data Set : It preprocess each molecule and hold their Adjacency Matrix and Feature Matrix. Also each molecule is parsed into fixed size vector.    
     - [X] Inside Iteration : masking indices were selected based on the symbol distribution and return A, X, masked_A, masked_X, masked_idx, P  
     - [X] Ground Truth : previous ground truth matrix is indexed inside the training iteration.  
-    - [ ] ~~Loss : weighted cross-entropy loss applied.~~  
     - [X] Put Masking Task in Batch_process fn
     - [X] Normalize A matrix in dataloader or iteration (Note. masked A should be generate from the Normalized A)
     - [X] Crop A matrix with max-atom length in order to increase speed
