@@ -25,10 +25,12 @@ echo Extracting Complete!
 cd ../
 pip install --upgrade pip
 pip install -r requirements.txt
-conda install pytorch-nightly -c pytorch
+conda install pytorch -c pytorch
 conda install -c rdkit rdkit
 pip install tensorflow-gpu
 cd ../
-git clone https://github.com/lanpa/tensorboardX && cd tensorboardX && python setup.py install
+git clone https://github.com/lanpa/tensorboardX && cd tensorboardX && python setup.py install && cd ../
+git clone https://github.com/heartcored98/deepchem && cd deepchem && gpu=1 bash scripts/install_deepchem_conda.sh && python setup.py install && cd ../
 
 cd ../comet
+
