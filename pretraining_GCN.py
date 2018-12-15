@@ -102,7 +102,7 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
                 _, _, molvec = models['encoder'](input_X, input_A)
                 pred_C = models['regressor'](molvec)
                 list_loss = [reg_loss(pred_C[:, i], input_C[:, i]) for i, label in enumerate(args.aux_task) ]
-                auxiliary_loss = sum(list_loss)
+                auxiliary_loss = args.r_lambda * sum(list_loss)
                 auxiliary_loss.backward()
                 optimizer['auxiliary'].step(cnt_iter)
                 torch.cuda.empty_cache()
@@ -180,11 +180,11 @@ def validate(models, data_loader, args, **kwargs):
     list_aux_mae = []
 
     # For F1-Score Metric & Confusion Matrix
-    confusion_symbol = np.zeros((args.vocab_size, args.vocab_size))
-    confusion_degree = np.zeros((args.degree_size, args.degree_size))
-    confusion_numH = np.zeros((args.numH_size, args.numH_size))
-    confusion_valence = np.zeros((args.valence_size, args.valence_size))
-    confusion_isarom = np.zeros((args.isarom_size, args.isarom_size))
+    confusion_symbol = np.zeros((args.vocab_size+1, args.vocab_size+1))
+    confusion_degree = np.zeros((args.degree_size+1, args.degree_size+1))
+    confusion_numH = np.zeros((args.numH_size+1, args.numH_size+1))
+    confusion_valence = np.zeros((args.valence_size+1, args.valence_size+1))
+    confusion_isarom = np.zeros((args.isarom_size+1, args.isarom_size+1))
 
 
     # Initialization Model with Evaluation Mode
@@ -264,16 +264,16 @@ def validate(models, data_loader, args, **kwargs):
                              classes=LIST_SYMBOLS, title="Symbol CM @ {}".format(cnt_iter), figsize=(10, 10)),
                          cnt_iter)
     val_writer.add_figure('degree/confusion',
-                         plot_confusion_matrix(confusion_degree, range(args.degree_size), title="Degree CM @ {}".format(cnt_iter)),
+                         plot_confusion_matrix(confusion_degree[1:, 1:], range(args.degree_size), title="Degree CM @ {}".format(cnt_iter)),
                          cnt_iter)
     val_writer.add_figure('numH/confusion',
-                         plot_confusion_matrix(confusion_numH, range(args.numH_size), title="NumH CM @ {}".format(cnt_iter)),
+                         plot_confusion_matrix(confusion_numH[1:, 1:], range(args.numH_size), title="NumH CM @ {}".format(cnt_iter)),
                          cnt_iter)
     val_writer.add_figure('valence/confusion',
-                         plot_confusion_matrix(confusion_valence, range(args.valence_size), title="Valence CM @ {}".format(cnt_iter)),
+                         plot_confusion_matrix(confusion_valence[1:, 1:], range(args.valence_size), title="Valence CM @ {}".format(cnt_iter)),
                          cnt_iter)
     val_writer.add_figure('isarom/confusion',
-                         plot_confusion_matrix(confusion_isarom, range(args.isarom_size),
+                         plot_confusion_matrix(confusion_isarom[1:, 1:], range(args.isarom_size),
                                                title="isAromatic CM @ {}".format(cnt_iter), figsize=(2,2)),
                          cnt_iter)
 
@@ -303,11 +303,11 @@ def validate(models, data_loader, args, **kwargs):
     val_writer.add_scalar('4.mask_metric/acc_valence', valence_acc, cnt_iter)
     val_writer.add_scalar('4.mask_metric/acc_isarom', isarom_acc, cnt_iter)
 
-    val_writer.add_scalar('4.mask_metric/f1_symbol', f1_macro(confusion_symbol), cnt_iter)
-    val_writer.add_scalar('4.mask_metric/f1_degree', f1_macro(confusion_degree), cnt_iter)
-    val_writer.add_scalar('4.mask_metric/f1_numH', f1_macro(confusion_numH), cnt_iter)
-    val_writer.add_scalar('4.mask_metric/f1_valence', f1_macro(confusion_valence), cnt_iter)
-    val_writer.add_scalar('4.mask_metric/f1_isarom', f1_macro(confusion_isarom), cnt_iter)
+    val_writer.add_scalar('4.mask_metric/f1_symbol', f1_macro(confusion_symbol[1:, 1:]), cnt_iter)
+    val_writer.add_scalar('4.mask_metric/f1_degree', f1_macro(confusion_degree[1:, 1:]), cnt_iter)
+    val_writer.add_scalar('4.mask_metric/f1_numH', f1_macro(confusion_numH[1:, 1:]), cnt_iter)
+    val_writer.add_scalar('4.mask_metric/f1_valence', f1_macro(confusion_valence[1:, 1:]), cnt_iter)
+    val_writer.add_scalar('4.mask_metric/f1_isarom', f1_macro(confusion_isarom[1:, 1:]), cnt_iter)
 
     if len(args.aux_task) > 0:
         list_aux_loss = np.mean(list_aux_loss, axis=0)
@@ -338,11 +338,11 @@ def experiment(dataloader, args):
     # Construct Model
     num_aux_task = len(args.aux_task)
     encoder = Encoder(args)
-    classifier = Classifier(args.out_dim, args.molvec_dim, args.classifier_dim, args.dp_rate, ACT2FN[args.act])
+    classifier = Classifier(args.out_dim, args.molvec_dim, args.classifier_dim, args.in_dim, args.cdp_rate, ACT2FN[args.act])
 
     models = {'encoder': encoder, 'classifier': classifier}
     if len(args.aux_task) > 0:
-        regressor = Regressor(args.molvec_dim, num_aux_task, args.dp_rate, ACT2FN[args.act])
+        regressor = Regressor(args.molvec_dim, args.regressor_dim, num_aux_task, args.rdp_rate, ACT2FN[args.act])
         models.update({'regressor': regressor})
 
     # Initialize Optimizer
@@ -408,9 +408,15 @@ if __name__ == '__main__':
 
     # ===== Model Definition =====#
     parser.add_argument("--in_dim", type=int, default=64)
-    parser.add_argument("--classifier_dim", type=int, default=59)
     parser.add_argument("--out_dim", type=int, default=256)
-    parser.add_argument("--molvec_dim", type=int, default=256)
+    parser.add_argument("--molvec_dim", type=int, default=512)
+    parser.add_argument("--classifier_dim", type=int, default=500)
+    parser.add_argument("--regressor_dim", type=int, default=500)
+
+    parser.add_argument("-dp", "--dp_rate", type=float, default=0.1)
+    parser.add_argument("-cdp", "--cdp_rate", type=float, default=0.3)
+    parser.add_argument("-rdp", "--rdp_rate", type=float, default=0.3)
+
 
     parser.add_argument("-n", "--n_layer", type=int, default=4)
     parser.add_argument("-k", "--n_attn_heads", type=int, default=8)
@@ -419,13 +425,13 @@ if __name__ == '__main__':
     parser.add_argument("-a", "--use_attn", type=bool, default=True)
     parser.add_argument("-b", "--use_bn", type=bool, default=True)
     parser.add_argument("-e", "--emb_train", type=bool, default=True)
-    parser.add_argument("-dp", "--dp_rate", type=float, default=0.1)
     parser.add_argument("--act", type=str, default='gelu')
 
     # ===== Optimizer =====#
     parser.add_argument("-u", "--optim", type=str, default='ADAM')
     parser.add_argument("-lf", "--lr_factor", type=float, default=1.0)
     parser.add_argument("-ls", "--lr_step", type=int, default=4000)
+    parser.add_argument("-rc", "--r_lambda", type=float, default=10.0)
 
     # ===== Training =====#
     parser.add_argument("-aux", "--aux_task", nargs='+', default=['logP', 'mr', 'tpsa'])
@@ -436,14 +442,14 @@ if __name__ == '__main__':
 
 
     parser.add_argument("-ep", "--epoch", type=int, default=100)
-    parser.add_argument("-bs", "--batch_size", type=int, default=1024)
+    parser.add_argument("-bs", "--batch_size", type=int, default=512)
     parser.add_argument("-tbs", "--test_batch_size", type=int, default=2048)
     parser.add_argument("-nw", "--num_workers", type=int, default=12)
 
     # ===== Logging =====#
-    parser.add_argument("-li", "--log_every", type=int, default= 20)  # Test: 10  #Default 40*10
-    parser.add_argument("-vi", "--validate_every", type=int, default= 250)  # Test:50 #Default 40*50
-    parser.add_argument("-si", "--save_every", type=int, default= 250)  # Test:50 #Default 40*100
+    parser.add_argument("-li", "--log_every", type=int, default= 10)  # Test: 10  #Default 40*10
+    parser.add_argument("-vi", "--validate_every", type=int, default= 500)  # Test:50 #Default 40*50
+    parser.add_argument("-si", "--save_every", type=int, default= 500)  # Test:50 #Default 40*100
 
     parser.add_argument("-mn", "--model_name", type=str, required=True)
     parser.add_argument("--log_path", type=str, default='runs')

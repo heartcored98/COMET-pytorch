@@ -34,18 +34,17 @@ import tensorflow as tf
 gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.333)
 
 sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
-def benchmark(dir_path, ckpt_file, tasks, _model, featurizer, metric_type):
+def benchmark(dir_path, ckpt_file, tasks, _model, featurizer, metric_type, hps):
     
-    header = ckpt_file.split('.')[0]
-    _ckpt = header+'_'+featurizer
+
     checkpoint = torch.load(join(dir_path, ckpt_file), map_location=torch.device('cuda'))
     args = checkpoint['args']
     _args = vars(args)
     args.batch_size = 1
     args.test_batch_size = 1
     args.act = 'gelu'
-#     comet = model.Encoder(args)
-    comet = model_old.Encoder(args)
+    comet = model.Encoder(args)
+    # comet = model_old.Encoder(args)
     comet.load_state_dict(checkpoint['encoder'])
     comet.eval()
 
@@ -87,18 +86,18 @@ def benchmark(dir_path, ckpt_file, tasks, _model, featurizer, metric_type):
     
 
     task_result = dc.molnet.run_benchmark(
-                                 ckpt = _ckpt,
+                                 ckpt = ckpt_file,
                                  arg = _args,
                                  datasets = tasks,
                                  model = _model,
                                  split = None,
                                  metric = _metric,
-                                 n_features = 256,
+                                 n_features = 512,
                                  featurizer = feat,
                                  out_path= './results',
-                                 hyper_parameters = None,
+                                 hyper_parameters = hps,
                                  test = True,
-                                 reload = True,
+                                 reload = False,
                                  seed = 123
                                  )
 
@@ -110,11 +109,11 @@ def benchmark(dir_path, ckpt_file, tasks, _model, featurizer, metric_type):
 # 
 # 2) regression: lipo, qm7, qm8, delaney, sampl
 
-cls_tasks = [ 'hiv', 'bace_c',  'bbbp', 'tox21', 'toxcast', 'sider', 'clintox'] #'pcba',
+cls_tasks = ['bace_c',  'bbbp', 'tox21', 'toxcast', 'sider', 'clintox'] #'pcba', 'hiv'
 # Dataset issue 'muv',
 
 # 
-reg_tasks =  [ 'qm8', 'qm9', 'sampl', 'bace_r', 'delaney', 'hopv', 'lipo', 'pdbbind', 'ppb', 'qm7'] #'nci', 'chembl'
+reg_tasks =  ['sampl', 'bace_r', 'delaney', 'hopv', 'lipo', 'pdbbind', 'ppb', 'qm7'] #'nci', 'chembl',  'qm8', 'qm9',
 # Take Too Long 'kaggle'
 # Shape issue 'qm7b'
 
@@ -151,8 +150,6 @@ fingerprint_result = dc.molnet.run_benchmark(
                                  seed = 123
                                  )
 
-"""
-# In[ ]:
 
 
 fingerprint_result = dc.molnet.run_benchmark(
@@ -170,4 +167,11 @@ fingerprint_result = dc.molnet.run_benchmark(
                                  reload = False,
                                  seed = 123
                                  )
+"""
+
+benchmark('./runs/exp1_l4_o256_v512_r1_train', 'exp1_l4_o256_v512_r1_006_000028500.tar',
+          cls_tasks, 'tf', 'comet', 'cls', hps=hps['tf'].update({'batch_size':2048}))
+
+benchmark('./runs/exp1_l4_o256_v512_r1_train', 'exp1_l4_o256_v512_r1_006_000028500.tar',
+          reg_tasks, 'tf_regression', 'comet', 'reg', hps=hps['tf_regression'].update({'batch_size':2048}))
 
