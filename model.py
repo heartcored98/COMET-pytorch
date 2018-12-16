@@ -189,9 +189,9 @@ class Encoder(nn.Module):
 
     def forward(self, input_X, A):
         x, A, molvec = self.encoder(input_X, A)
-        x = self.dropout(self.bn1(self.act(self.fc1(x))))
-        x = self.dropout(self.bn2(self.act(self.fc2(x))))
-        x = self.fc3(x)
+        molvec = self.dropout(self.bn1(self.act(self.fc1(molvec))))
+        molvec = self.dropout(self.bn2(self.act(self.fc2(molvec))))
+        molvec = self.fc3(molvec)
         return x, A, molvec
 
     def encoder(self, input_X, A):
@@ -228,15 +228,18 @@ class Encoder(nn.Module):
 
 
 class Classifier(nn.Module):
-    def __init__(self, out_dim, molvec_dim, classifier_dim, dropout_rate=0.1, act=ACT2FN['relu']):
+    def __init__(self, out_dim, molvec_dim, classifier_dim, in_dim, dropout_rate=0.3, act=ACT2FN['relu']):
         super(Classifier, self).__init__()
+        self.in_dim = in_dim
         self.out_dim = out_dim
         self.molvec_dim = molvec_dim
         self.classifier_dim = classifier_dim
 
         self.fc1 = nn.Linear(self.molvec_dim + self.out_dim, self.classifier_dim)
-        self.fc2 = nn.Linear(self.classifier_dim, self.classifier_dim)
+        self.fc2 = nn.Linear(self.classifier_dim, self.classifier_dim // 2)
+        self.fc3 = nn.Linear(self.classifier_dim // 2, self.in_dim)
         self.bn1 = BN1d(self.classifier_dim)
+        self.bn2 = BN1d(self.classifier_dim // 2)
         self.act = act
         self.dropout = nn.Dropout(p=dropout_rate)
         self.param_initializer()
@@ -261,7 +264,8 @@ class Classifier(nn.Module):
 
     def classify(self, concat_x):
         x = self.dropout(self.bn1(self.act(self.fc1(concat_x))))
-        x = self.fc2(x)
+        x = self.dropout(self.bn2(self.act(self.fc2(x))))
+        x = self.fc3(x)
         return x
 
     def param_initializer(self):
@@ -270,17 +274,27 @@ class Classifier(nn.Module):
 
 
 class Regressor(nn.Module):
-    def __init__(self, molvec_dim, num_aux_task, dropout_rate=0.1, act=ACT2FN['relu']):
+    def __init__(self, molvec_dim, classifier_dim, num_aux_task, dropout_rate=0.3, act=ACT2FN['relu']):
         super(Regressor, self).__init__()
 
         self.molvec_dim = molvec_dim
-        self.reg_fc1 = nn.Linear(self.molvec_dim, self.molvec_dim // 2)
-        self.reg_fc2 = nn.Linear(self.molvec_dim // 2, num_aux_task)
-        self.bn1 = nn.BatchNorm1d(self.molvec_dim // 2)
+        self.classifier_dim = classifier_dim
+        self.fc1 = nn.Linear(self.molvec_dim, self.classifier_dim)
+        self.fc2 = nn.Linear(self.classifier_dim, self.classifier_dim // 2)
+        self.fc3 = nn.Linear(self.classifier_dim // 2, num_aux_task)
+        self.bn1 = nn.BatchNorm1d(self.classifier_dim)
+        self.bn2 = nn.BatchNorm1d(self.classifier_dim // 2)
         self.dropout = nn.Dropout(p=dropout_rate)
         self.act = act
+        self.param_initializer()
 
     def forward(self, molvec):
-        x = self.dropout(self.bn1(self.act(self.reg_fc1(molvec))))
-        x = self.reg_fc2(x)
+        x = self.dropout(self.bn1(self.act(self.fc1(molvec))))
+        x = self.dropout(self.bn2(self.act(self.fc2(x))))
+        x = self.fc3(x)
         return torch.squeeze(x)
+
+    def param_initializer(self):
+        nn.init.xavier_normal_(self.fc1.weight.data)
+        nn.init.xavier_normal_(self.fc2.weight.data)
+        nn.init.xavier_normal_(self.fc3.weight.data)
