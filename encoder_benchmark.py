@@ -32,9 +32,9 @@ import numpy as np
 
 # In[ ]:
 
-gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.333)
+# gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.333)
 
-sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+# sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
 def benchmark(dir_path, ckpt_file, tasks, _model, featurizer, metric_type, hps):
     
     if featurizer == 'comet':
@@ -116,8 +116,8 @@ def benchmark(dir_path, ckpt_file, tasks, _model, featurizer, metric_type, hps):
                                      )
 
 
-cls_tasks = ['bace_c',  'bbbp', 'tox21', 'toxcast', 'sider', 'clintox'] #'pcba', 'hiv'
-reg_tasks =  ['sampl', 'bace_r', 'delaney', 'hopv', 'lipo', 'pdbbind', 'ppb', 'qm7'] #'nci', 'chembl',  'qm8', 'qm9',
+cls_tasks = ['pcba', 'hiv'] #['bace_c',  'bbbp', 'tox21', 'toxcast', 'sider', 'clintox'] #['pcba', 'hiv']
+reg_tasks =  ['pdbbind']  #['sampl', 'bace_r', 'delaney', 'hopv', 'lipo', 'pdbbind', 'ppb', 'qm7'] #'nci', 'chembl',  'qm8', 'qm9',
 # Take Too Long 'kaggle'
 # Shape issue 'qm7b'
 
@@ -147,8 +147,8 @@ for task in reg_tasks:
                                      model = 'tf_regression',
                                      split = None,
                                      metric =  metric,
-                                     n_features = 512,
-                                     featurizer = dc.feat.fingerprints.CircularFingerprint(size=512),
+                                     n_features = 1024,
+                                     featurizer = dc.feat.fingerprints.CircularFingerprint(size=1024),
                                      out_path= './results',
                                      hyper_parameters = temp_hps,
                                      # hyper_param_search=True,
@@ -175,6 +175,7 @@ fingerprint_result = dc.molnet.run_benchmark(
                                  reload = False,
                                  seed = 123
                                  )
+
 for task in reg_tasks:
     metric = get_reg_metric(task)
     temp_hps = hps['tf_regression']
@@ -186,7 +187,7 @@ for task in reg_tasks:
                                      model = 'tf_regression',
                                      split = None,
                                      metric =  metric,
-                                     n_features = 512,
+                                     n_features = 1024,
                                      featurizer = 'rand',
                                      out_path= './results',
                                      hyper_parameters = temp_hps,
@@ -207,9 +208,10 @@ fingerprint_result = benchmark('', 'rand', reg_tasks, 'tf_regression', 'rand', '
 """
 
 def benchmark_dir(dir_path):
-    list_file = get_dir_files(dir_path)
-    idx = 1
-    skip = 3
+    list_file = [ file for file in get_dir_files(dir_path) if '.tar' in file]
+    list_file.sort()
+    idx = 0
+    skip = 1
     while idx < len(list_file):
         try:
             ckpt = list_file[idx]
@@ -217,27 +219,33 @@ def benchmark_dir(dir_path):
             print('benchmarking : {}.  Progress : {}/{}'.format(ckpt, idx, len(list_file)))
             print('####################################################################')
 
-            #temp_hps = hps['tf']
-            #temp_hps.update({'batch_size':256})
-            #benchmark(dir_path, ckpt, cls_tasks, 'tf', 'rand', 'cls', hps=temp_hps)
+            # temp_hps = hps['tf']
+            # temp_hps.update({'batch_size':256})
+            # benchmark(dir_path, ckpt, cls_tasks, 'tf', 'comet', 'cls', hps=temp_hps)
 
             temp_hps = hps['tf_regression']
             temp_hps.update({'batch_size':256})
-            benchmark(dir_path, ckpt, ['pdbbind'], 'tf_regression', 'comet', 'reg', hps=temp_hps)
+            benchmark(dir_path, ckpt, reg_tasks, 'tf_regression', 'comet', 'reg', hps=temp_hps)
         except:
             pass
         finally:
             idx += skip
 
 if __name__ == '__main__':
-    dir_path1 = './runs/exp1_l4_o256_v512_r1_train'
+    pass
+    dir_path1 = './runs/exp2_l4_o256_v512_r1_lf0.2_train'
     benchmark_dir(dir_path1)
-    dir_path2 = './runs/exp1_l4_o256_v512_r2_train'
+    dir_path2 = './runs/exp2_l4_o256_v512_r1_lf0.5_train'
     benchmark_dir(dir_path2)
-    dir_path3 = './runs/exp1_l4_o256_v512_r3_2_train'
+    dir_path3 = './runs/exp1_l4_o256_v512_r1_train'
     benchmark_dir(dir_path3)
-    # dir_path = './runs/rand'
-    # ckpt_model = 'rand'
-    # benchmark_dir(dir_path)
 
+    # ===== For Rand ===== #
+    """
+    dir_path = './runs/rand'
+    ckpt_model = 'rand'
+    temp_hps = hps['tf_regression']
+    temp_hps.update({'batch_size': 256})
+    benchmark(dir_path, 'rand', reg_tasks, 'tf_regression', 'rand', 'reg', hps=temp_hps)
+    """
     

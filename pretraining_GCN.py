@@ -64,12 +64,9 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
                 model.train()
 
             optimizer['mask'].zero_grad()
-            optimizer['auxiliary'].zero_grad()
 
             # Get Batch Sample from DataLoader
             predict_idx, X, mask_X, true_X, A, C = batch
-
-            # Normalize A matrix in order to prevent overflow
 
             # Convert Tensor into Variable and Move to CUDA
             mask_idx = Variable(predict_idx).to(args.device).long()
@@ -83,7 +80,8 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
             t2 = time.time()
             # Encoding Masked Molecule
             encoded_X, _, molvec = models['encoder'](mask_X, input_A)
-            pred_X = models['classifier'](encoded_X, molvec, mask_idx)
+            property_molvec = torch.cat((molvec, input_C), dim=1)
+            pred_X = models['classifier'](encoded_X, property_molvec, mask_idx)
 
             # Compute Mask Task Loss
             symbol_loss, degree_loss, numH_loss, valence_loss, isarom_loss = compute_loss(pred_X, true_X)
@@ -97,17 +95,6 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
 
             t3 = time.time()
 
-            # Compute Loss of Original Molecule Property
-            if len(args.aux_task) > 0:
-                _, _, molvec = models['encoder'](input_X, input_A)
-                pred_C = models['regressor'](molvec)
-                list_loss = [reg_loss(pred_C[:, i], input_C[:, i]) for i, label in enumerate(args.aux_task) ]
-                auxiliary_loss = args.r_lambda * sum(list_loss)
-                auxiliary_loss.backward()
-                optimizer['auxiliary'].step(cnt_iter)
-                torch.cuda.empty_cache()
-
-            t4 = time.time()
             # print("total {:2.2f}. Prepare {:2.2f}. Mask {:2.2f}. Aux {:2.2f}".format(t4-t1, t2-t1, t3-t2, t4-t3))
             cnt_iter += 1
             setattr(args, 'epoch_now', epoch)
@@ -121,22 +108,17 @@ def train(models, optimizer, dataloader, epoch, cnt_iter, args):
                 train_writer.add_scalar('2.mask_loss/valence', valence_loss, cnt_iter)
                 train_writer.add_scalar('2.mask_loss/isarom', isarom_loss, cnt_iter)
                 train_writer.add_scalar('1.status/mask', mask_loss, cnt_iter)
-                if len(args.aux_task) > 0:
-                    train_writer.add_scalar('1.status/auxiliary', auxiliary_loss, cnt_iter)
-                    for i, task in enumerate(args.aux_task):
-                        train_writer.add_scalar('3.auxiliary_loss/{}'.format(task), list_loss[i], cnt_iter)
 
-                output = "[TRAIN] E:{:3}. P:{:>2.1f}%. Loss:{:>9.3}. Mask Loss:{:>9.3}. {:4.1f} mol/sec. Iter:{:6}.  Elapsed:{:6.1f} sec."
+                output = "[TRAIN] E:{:3}. P:{:>2.1f}%. Mask Loss:{:>9.3}. {:4.1f} mol/sec. Iter:{:6}.  Elapsed:{:6.1f} sec."
                 elapsed = time.time() - t
                 process_speed = (args.batch_size * args.log_every) / elapsed
-                output = output.format(epoch, batch_idx / len(dataloader['train']) * 100.0, mask_loss, auxiliary_loss, process_speed, cnt_iter, elapsed,)
+                output = output.format(epoch, batch_idx / len(dataloader['train']) * 100.0, mask_loss,  process_speed, cnt_iter, elapsed,)
                 t = time.time()
                 logger.info(output)
 
             # Validate Model
             if cnt_iter % args.validate_every == 0:
                 optimizer['mask'].zero_grad()
-                optimizer['auxiliary'].zero_grad()
                 validate(models, dataloader['val'], args, cnt_iter=cnt_iter, epoch=epoch)
                 t = time.time()
 
@@ -175,10 +157,6 @@ def validate(models, data_loader, args, **kwargs):
     list_valence_acc = []
     list_isarom_acc = []
 
-    # For Auxiliary Task Loss
-    list_aux_loss = []
-    list_aux_mae = []
-
     # For F1-Score Metric & Confusion Matrix
     confusion_symbol = np.zeros((args.vocab_size+1, args.vocab_size+1))
     confusion_degree = np.zeros((args.degree_size+1, args.degree_size+1))
@@ -207,7 +185,8 @@ def validate(models, data_loader, args, **kwargs):
 
             # Encoding Masked Molecule
             encoded_X, _, molvec = models['encoder'](mask_X, input_A)
-            pred_X = models['classifier'](encoded_X, molvec, mask_idx)
+            property_molvec = torch.cat((molvec, input_C), dim=1)
+            pred_X = models['classifier'](encoded_X, property_molvec, mask_idx)
 
             # Compute Mask Task Loss & Property Regression Loss
             symbol_loss, degree_loss, numH_loss, valence_loss, isarom_loss = compute_loss(pred_X, true_X)
@@ -234,17 +213,6 @@ def validate(models, data_loader, args, **kwargs):
             confusion_numH += confusions[2]
             confusion_valence += confusions[3]
             confusion_isarom += confusions[4]
-
-            if len(args.aux_task) > 0:
-                _, _, molvec = models['encoder'](input_X, input_A)
-                pred_C = models['regressor'](molvec)
-                temp_loss = [reg_loss(pred_C[:, i], input_C[:, i]).item() for i, label in enumerate(args.aux_task)]
-                list_aux_loss.append(temp_loss)
-
-                pred_C = pred_C.cpu().detach().numpy()
-                input_C = input_C.cpu().detach().numpy()
-                list_aux_mae.append([mean_absolute_error(pred_C[:, i], input_C[:, i]) for i, label in enumerate(args.aux_task)])
-                torch.cuda.empty_cache()
 
             temp_iter += 1
 
@@ -309,25 +277,15 @@ def validate(models, data_loader, args, **kwargs):
     val_writer.add_scalar('4.mask_metric/f1_valence', f1_macro(confusion_valence[1:, 1:]), cnt_iter)
     val_writer.add_scalar('4.mask_metric/f1_isarom', f1_macro(confusion_isarom[1:, 1:]), cnt_iter)
 
-    if len(args.aux_task) > 0:
-        list_aux_loss = np.mean(list_aux_loss, axis=0)
-        list_aux_mae = np.mean(list_aux_mae, axis=0)
-
-        for i, task in enumerate(args.aux_task):
-            val_writer.add_scalar('3.auxiliary_loss/{}'.format(task), list_aux_loss[i], cnt_iter)
-            val_writer.add_scalar('5.auxiliary_mae/{}'.format(task), list_aux_mae[i], cnt_iter)
-
-        auxiliary_loss = np.mean(list_aux_loss)
-        val_writer.add_scalar('1.status/auxiliary', auxiliary_loss, cnt_iter)
     val_writer.add_scalar('1.status/mask', mask_loss, cnt_iter)
 
     # Log model weight historgram
     log_histogram(models, val_writer, cnt_iter)
 
-    output = "[VALID] E:{:3}. P:{:>2.1f}%. Mask Loss:{:>9.3}. Aux Loss:{:>9.3}. {:4.1f} mol/sec. Iter:{:6}.  Elapsed:{:6.1f} sec."
+    output = "[VALID] E:{:3}. P:{:>2.1f}%. Mask Loss:{:>9.3}. {:4.1f} mol/sec. Iter:{:6}.  Elapsed:{:6.1f} sec."
     elapsed = time.time() - t
     process_speed = (args.test_batch_size * args.log_every) / elapsed
-    output = output.format(epoch, batch_idx / len(data_loader) * 100.0, mask_loss, auxiliary_loss, process_speed, cnt_iter, elapsed)
+    output = output.format(epoch, batch_idx / len(data_loader) * 100.0, mask_loss, process_speed, cnt_iter, elapsed)
     logger.info(output)
     torch.cuda.empty_cache()
 
@@ -338,39 +296,30 @@ def experiment(dataloader, args):
     # Construct Model
     num_aux_task = len(args.aux_task)
     encoder = Encoder(args)
-    classifier = Classifier(args.out_dim, args.molvec_dim, args.classifier_dim, args.in_dim, args.cdp_rate, ACT2FN[args.act])
-
+    classifier = Classifier(args.out_dim, args.molvec_dim + num_aux_task, args.classifier_dim, args.in_dim, args.cdp_rate, ACT2FN[args.act])
     models = {'encoder': encoder, 'classifier': classifier}
-    if len(args.aux_task) > 0:
-        regressor = Regressor(args.molvec_dim, args.regressor_dim, num_aux_task, args.rdp_rate, ACT2FN[args.act])
-        models.update({'regressor': regressor})
+
 
     # Initialize Optimizer
     logger.info('####### Model Constructed #######')
     mask_trainable_parameters = list()
-    auxiliary_trainable_parameters = list()
     for key, model in models.items():
         model.to(args.device)
         if key in ['encoder', 'classifier']:
             mask_trainable_parameters += list(filter(lambda p: p.requires_grad, model.parameters()))
-        if key in ['encoder', 'regressor']:
-            auxiliary_trainable_parameters += list(filter(lambda p: p.requires_grad, model.parameters()))
         logger.info('{:10}: {:>10} parameters'.format(key, sum(p.numel() for p in model.parameters())))
         setattr(args, '{}_param'.format(key), sum(p.numel() for p in model.parameters()))
     logger.info('#################################')
     
     if args.optim == 'ADAM':
         mask_optimizer = optim.Adam(mask_trainable_parameters, lr=0, betas=(0.9, 0.98), eps=1e-9)
-        auxiliary_optimizer = optim.Adam(auxiliary_trainable_parameters, lr=0, betas=(0.9, 0.98), eps=1e-9)
     elif args.optim == 'RMSProp':
         mask_optimizer = optim.RMSprop(mask_trainable_parameters, lr=0)
-        auxiliary_optimizer = optim.RMSprop(auxiliary_trainable_parameters, lr=0)
     elif args.optim == 'SGD':
         mask_optimizer = optim.SGD(mask_trainable_parameters, lr=0)
-        auxiliary_optimizer = optim.SGD(auxiliary_trainable_parameters, lr=0)
     else:
         assert False, "Undefined Optimizer Type"
-    optimizers = {'mask':mask_optimizer, 'auxiliary':auxiliary_optimizer}
+    optimizers = {'mask':mask_optimizer}
 
     # Reload Checkpoint Model
     epoch = 0
@@ -380,8 +329,7 @@ def experiment(dataloader, args):
         logger.info('Loaded Model from {}'.format(args.ck_filename))
     
     mask_optimizer = NoamOpt(args.out_dim, args.lr_factor, args.lr_step, optimizers['mask'])
-    auxiliary_optimizer = NoamOpt(args.out_dim, args.lr_factor, args.lr_step, optimizers['auxiliary'])
-    optimizers = {'mask':mask_optimizer, 'auxiliary':auxiliary_optimizer}
+    optimizers = {'mask':mask_optimizer}
 
     # Train Model
     validate(models, dataloader['val'], args, cnt_iter=cnt_iter, epoch=epoch)
@@ -441,7 +389,7 @@ if __name__ == '__main__':
     parser.add_argument("-ml", "--max_len", type=int, default=50)
 
 
-    parser.add_argument("-ep", "--epoch", type=int, default=100)
+    parser.add_argument("-ep", "--epoch", type=int, default=10)
     parser.add_argument("-bs", "--batch_size", type=int, default=512)
     parser.add_argument("-tbs", "--test_batch_size", type=int, default=2048)
     parser.add_argument("-nw", "--num_workers", type=int, default=12)
@@ -449,7 +397,7 @@ if __name__ == '__main__':
     # ===== Logging =====#
     parser.add_argument("-li", "--log_every", type=int, default= 10)  # Test: 10  #Default 40*10
     parser.add_argument("-vi", "--validate_every", type=int, default= 500)  # Test:50 #Default 40*50
-    parser.add_argument("-si", "--save_every", type=int, default= 500)  # Test:50 #Default 40*100
+    parser.add_argument("-si", "--save_every", type=int, default= 1000)  # Test:50 #Default 40*100
 
     parser.add_argument("-mn", "--model_name", type=str, required=True)
     parser.add_argument("--log_path", type=str, default='runs')
