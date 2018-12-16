@@ -431,7 +431,7 @@ if __name__ == '__main__':
     parser.add_argument("-u", "--optim", type=str, default='ADAM')
     parser.add_argument("-lf", "--lr_factor", type=float, default=1.0)
     parser.add_argument("-ls", "--lr_step", type=int, default=4000)
-    parser.add_argument("-rc", "--r_lambda", type=float, default=10.0)
+    parser.add_argument("-rc", "--r_lambda", type=float, default=1.0)
 
     # ===== Training =====#
     parser.add_argument("-aux", "--aux_task", nargs='+', default=['logP', 'mr', 'tpsa'])
