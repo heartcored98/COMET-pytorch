@@ -61,9 +61,11 @@ def process_smile(row):
         mr = MolMR(m)
         tpsa = CalcTPSA(m)
         n_atom = m.GetNumAtoms()
+        # TODO : SAS, MW implement
         del m
         return smi, logP, mr, tpsa, n_atom
     except:
+        # TODO : adjust None
         return None, None, None, None, None
 
 
@@ -92,6 +94,7 @@ def process_dataset(chunk_size,
     # Initialize List
     train_row_buffer = list()
     val_row_buffer = list()
+    # TODO :
     label_columns = ('smile', 'logP', 'mr', 'tpsa', 'length')
     target_list_file = list_file[start_offset:end_offset]
     threshold = int(1 / sampling_rate) * 100
@@ -203,12 +206,12 @@ if __name__ == '__main__':
     parser.add_argument("-ts", "--temp_size", help="number of rows in one chunk ", type=int, default=50000000)
     parser.add_argument("-n", "--num_worker", help="number of co-working process", type=int, default=16)
     parser.add_argument("-r", "--test_size", help="portion of validation_set", type=float, default=0.2)
-    parser.add_argument("-t", "--flag_continue", help="whether continue writing file", type=bool, default=True)
+    parser.add_argument("-t", "--flag_continue", help="whether continue writing file", type=bool, default=False)
 
     parser.add_argument("-s", "--start_offset", help="starting from i-th file in directory", type=int, default=0)
     parser.add_argument("-e", "--end_offset", help="end processing at i-th file in directory", type=int, default=-1)
-    parser.add_argument("-d", "--raw_dir_path", help="directory where dataset stored", type=str, default='./raw_zinc_smiles')
-    parser.add_argument("-o", "--output_dir_path", help="directory where processed data saved", type=str, default='./dataset/bal_s')
+    parser.add_argument("-d", "--raw_dir_path", help="directory where dataset stored", type=str, default='../comet/raw_zinc_smiles')
+    parser.add_argument("-o", "--output_dir_path", help="directory where processed data saved", type=str, default='./dataset/s')
 
     args = parser.parse_args()
 

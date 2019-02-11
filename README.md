@@ -25,6 +25,15 @@ COMET(Chemically Omnipotent Molecular Encoder from Transformer)
     - [ ] Data Loader : Masked A would provide  
     - [ ] Model : A should be calculate from previous A.   
     
+- [ ] branch_partial_charge_atom_feature  
+    - [ ] Add SAS, MW molecular property
+    - [ ] Preprocess Zinc to csv files (s, xs, xxs)
+    - [ ] Add partial charge atom feature
+    - [ ] Check tensor type (watch for long tensor)  
+    - [ ] modify dataset handling partial charge, molecular property  
+    - [ ] modify dataloader handling partial charge, molecular property     
+
+    
 # Dataset  
 Total Number of Molecules in Raw Zinc Dataset : 531,354,040
 
