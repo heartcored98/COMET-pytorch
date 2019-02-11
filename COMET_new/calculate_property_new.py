@@ -1,13 +1,12 @@
-import multiprocessing as mp
 import os
-from os.path import isfile, join
+from os.path import isfile
 import time
 import argparse
-from random import sample
 from sklearn.model_selection import train_test_split
 from rdkit import Chem
 from rdkit.Chem.Crippen import MolLogP, MolMR
-from rdkit.Chem.rdMolDescriptors import CalcTPSA #,CalcPBF
+from rdkit.Chem.rdMolDescriptors import CalcTPSA
+from rdkit.Chem.Descriptors import ExactMolWt
 import pandas as df
 import re
 import numpy as np
@@ -15,7 +14,8 @@ from numpy.random import choice
 import gc
 
 
-from dataloader import *
+from COMET_new.dataloader_new import *
+from sascorer import *
 
 
 def extract_num(list_file):
@@ -27,10 +27,12 @@ def extract_num(list_file):
     return max(list_num)+1
 
 
-def get_last_num(output_dir_path='./dataset/processed_zinc_smiles'):
-    train_ouput_dir_path = join(output_dir_path, 'train')
+def get_last_num(output_dir_path='./preprocessed/'):
+    train_output_dir_path = join(output_dir_path, 'train')
     val_output_dir_path = join(output_dir_path, 'val')
-    train_list_file = [f for f in os.listdir(train_ouput_dir_path) if isfile(join(train_ouput_dir_path, f))]
+    # train_output_dir_path = output_dir_path
+    # val_output_dir_path = output_dir_path
+    train_list_file = [f for f in os.listdir(train_output_dir_path) if isfile(join(train_output_dir_path, f))]
     val_list_file = [f for f in os.listdir(val_output_dir_path) if isfile(join(val_output_dir_path, f))]
     last_train_num = extract_num(train_list_file)
     last_val_num = extract_num(val_list_file)
@@ -60,13 +62,16 @@ def process_smile(row):
         m = Chem.MolFromSmiles(smi)
         logP = MolLogP(m)
         mr = MolMR(m)
+        sas = calculateScore(m)
         tpsa = CalcTPSA(m)
+        mw = ExactMolWt(m)
         n_atom = m.GetNumAtoms()
         del m
-        return smi, logP, mr, tpsa, n_atom
+        return smi, logP, sas, tpsa, mr, mw, n_atom
     except:
-        return None, None, None, None, None
+        return None, None, None, None, None, None, None
 
+# preprocessing
 
 def process_dataset(chunk_size,
                     temp_size,
@@ -93,8 +98,9 @@ def process_dataset(chunk_size,
     # Initialize List
     train_row_buffer = list()
     val_row_buffer = list()
-    label_columns = ('smile', 'logP', 'mr', 'tpsa', 'length')
-    target_list_file = list_file[start_offset:end_offset]
+    label_columns = ('smile', 'logP', 'sas', 'tpsa', 'mr', 'mw', 'length')
+    # target_list_file = list_file[start_offset:end_offset]
+    target_list_file = list_file
     threshold = int(1 / sampling_rate) * 100
 
     last_train_ck = 0
@@ -130,7 +136,7 @@ def process_dataset(chunk_size,
                 df_train = df.DataFrame.from_records(train_row_buffer, columns=label_columns)
                 df_train = df_train.dropna()
                 df_train.sort_values(by=['length'], ascending=False, inplace=True)
-                df_train.to_csv(path_or_buf=join(output_dir_path, 'train/train{:06d}.csv'.format(cnt_train_chunk)),
+                df_train.to_csv(path_or_buf=join(output_dir_path, 'train{:06d}.csv'.format(cnt_train_chunk)),
                                 float_format='%g', index=False)
                 last_train_ck = len(train_row_buffer) // temp_size
                 print("Train Checkpoint Saved with train{:06d}.csv CK:{}".format(cnt_train_chunk, last_train_ck))
@@ -140,7 +146,7 @@ def process_dataset(chunk_size,
                 df_val = df.DataFrame.from_records(val_row_buffer, columns=label_columns)
                 df_val = df_val.dropna()
                 df_val.sort_values(by=['length'], ascending=False, inplace=True)
-                df_val.to_csv(path_or_buf=join(output_dir_path, 'val/val{:06d}.csv'.format(cnt_val_chunk)),
+                df_val.to_csv(path_or_buf=join(output_dir_path, 'val{:06d}.csv'.format(cnt_val_chunk)),
                               float_format='%g', index=False)
                 last_val_ck = len(val_row_buffer) // temp_size
                 print("Valid Checkpoint Saved with   val{:06d}.csv CK:{}".format(cnt_val_chunk, last_val_ck))
@@ -176,12 +182,12 @@ def process_dataset(chunk_size,
     df_train = df.DataFrame.from_records(train_row_buffer, columns=label_columns)
     df_train = df_train.dropna()
     df_train.sort_values(by=['length'], ascending=False, inplace=True)
-    df_train.to_csv(path_or_buf=join(output_dir_path, 'train/train{:06d}.csv'.format(cnt_train_chunk)),
+    df_train.to_csv(path_or_buf=join(output_dir_path, 'train{:06d}.csv'.format(cnt_train_chunk)),
                         float_format='%g', index=False)
     df_val = df.DataFrame.from_records(val_row_buffer, columns=label_columns)
     df_val = df_val.dropna()
     df_val.sort_values(by=['length'], ascending=False, inplace=True)
-    df_val.to_csv(path_or_buf=join(output_dir_path, 'val/val{:06d}.csv'.format(cnt_val_chunk)), float_format='%g',
+    df_val.to_csv(path_or_buf=join(output_dir_path, 'val{:06d}.csv'.format(cnt_val_chunk)), float_format='%g',
                   index=False)
 
     te = time.time()
@@ -192,9 +198,8 @@ def process_dataset(chunk_size,
     print("======================================================================================")
 
 
-
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Add logP, TPSA, MR, PBF value on .smi files')
+    parser = argparse.ArgumentParser(description='Add logP, TPSA, SAS, MR value on .smi files')
     # S : 0.0047049 -> 2M / 0.5M
     # XS : 0.0047049 * 0.3 -> 0.6M / 0.15M
     # XXS : 0.00047049 -> 0.2M / 0.05M
@@ -208,10 +213,11 @@ if __name__ == '__main__':
 
     parser.add_argument("-s", "--start_offset", help="starting from i-th file in directory", type=int, default=0)
     parser.add_argument("-e", "--end_offset", help="end processing at i-th file in directory", type=int, default=-1)
-    parser.add_argument("-d", "--raw_dir_path", help="directory where dataset stored", type=str, default='./raw_zinc_smiles')
-    parser.add_argument("-o", "--output_dir_path", help="directory where processed data saved", type=str, default='./dataset/bal_s')
+    parser.add_argument("-d", "--raw_dir_path", help="directory where dataset stored", type=str, default='./data/tox21/')
+    parser.add_argument("-o", "--output_dir_path", help="directory where processed data saved", type=str, default='./preprocessed/')
 
     args = parser.parse_args()
+    args.sampling_rate = 1
 
 
     process_dataset(chunk_size=args.chunk_size,
@@ -226,4 +232,3 @@ if __name__ == '__main__':
                     test_size=args.test_size)
 
 
-    print("test")
