@@ -26,12 +26,12 @@ COMET(Chemically Omnipotent Molecular Encoder from Transformer)
     - [ ] Model : A should be calculate from previous A.   
     
 - [ ] branch_partial_charge_atom_feature  
-    - [ ] Add SAS, MW molecular property
-    - [ ] Preprocess Zinc to csv files (s, xs, xxs)
-    - [ ] Add partial charge atom feature
+    - [X] Add SAS, MW molecular property
+    - [X] Preprocess Zinc to csv files (s, xs, xxs) 
+    - [X] Add partial charge atom feature
     - [ ] Check tensor type (watch for long tensor)  
-    - [ ] modify dataset handling partial charge, molecular property  
-    - [ ] modify dataloader handling partial charge, molecular property     
+    - [X] modify dataset handling partial charge, molecular property  
+    - [X] modify dataloader handling partial charge, molecular property     
 
     
 # Dataset  
