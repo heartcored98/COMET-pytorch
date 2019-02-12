@@ -6,6 +6,7 @@ import argparse
 from random import sample
 from sklearn.model_selection import train_test_split
 from rdkit import Chem
+from rdkit.Chem.Descriptors import ExactMolWt
 from rdkit.Chem.Crippen import MolLogP, MolMR
 from rdkit.Chem.rdMolDescriptors import CalcTPSA #,CalcPBF
 import pandas as df
@@ -16,6 +17,8 @@ import gc
 
 
 from dataloader import *
+from sascorer import *
+
 
 def extract_num(list_file):
     list_num = list()
@@ -60,13 +63,13 @@ def process_smile(row):
         logP = MolLogP(m)
         mr = MolMR(m)
         tpsa = CalcTPSA(m)
+        sas = calculateScore(m)
+        mw = ExactMolWt(m)
         n_atom = m.GetNumAtoms()
-        # TODO : SAS, MW implement
         del m
-        return smi, logP, mr, tpsa, n_atom
+        return smi, logP, mr, tpsa, sas, mw, n_atom
     except:
-        # TODO : adjust None
-        return None, None, None, None, None
+        return None, None, None, None, None, None, None
 
 
 def process_dataset(chunk_size,
@@ -81,7 +84,14 @@ def process_dataset(chunk_size,
                     end_offset):
     ts = time.time()
 
-    list_file = [f for f in os.listdir(raw_dir_path) if isfile(join(raw_dir_path, f))]
+    _list_file = [f for f in os.listdir(raw_dir_path) if isfile(join(raw_dir_path, f))]
+    list_file = list()
+
+    # remove redundant files
+    for i, filename in enumerate(_list_file):
+        if not (filename[-3] == '_') or filename[-2:] == '00':
+            list_file.append(filename)
+
     cnt_train_mol = 0
     cnt_val_mol = 0
 
@@ -94,8 +104,7 @@ def process_dataset(chunk_size,
     # Initialize List
     train_row_buffer = list()
     val_row_buffer = list()
-    # TODO :
-    label_columns = ('smile', 'logP', 'mr', 'tpsa', 'length')
+    label_columns = ('smile', 'logP', 'mr', 'tpsa', 'sas', 'mw', 'length')
     target_list_file = list_file[start_offset:end_offset]
     threshold = int(1 / sampling_rate) * 100
 
@@ -194,7 +203,6 @@ def process_dataset(chunk_size,
     print("======================================================================================")
 
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Add logP, TPSA, MR, PBF value on .smi files')
     # S : 0.0047049 -> 2M / 0.5M
@@ -226,5 +234,4 @@ if __name__ == '__main__':
                     start_offset=args.start_offset,
                     end_offset=args.end_offset,
                     test_size=args.test_size)
-
 
