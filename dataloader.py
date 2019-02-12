@@ -7,6 +7,7 @@ from torch.utils.data import Dataset, DataLoader
 from torch._six import int_classes as _int_classes
 from torch.utils.data.sampler import Sampler, SequentialSampler
 from rdkit import Chem
+from rdkit.Chem import rdPartialCharges
 from scipy.linalg import fractional_matrix_power
 import numpy as np
 from numpy.linalg import matrix_power
@@ -50,7 +51,8 @@ def atom_feature(atom):
                     char_to_ix(atom.GetDegree(), [0, 1, 2, 3, 4, 5]) +
                     char_to_ix(atom.GetTotalNumHs(), [0, 1, 2, 3, 4]) +
                     char_to_ix(atom.GetImplicitValence(), [0, 1, 2, 3, 4, 5]) +
-                    char_to_ix(int(atom.GetIsAromatic()), [0, 1]))    # (40, 6, 5, 6, 2)
+                    char_to_ix(int(atom.GetIsAromatic()), [0, 1]) +
+                    [atom.GetProp('_GasteigerCharge')])    # (40, 6, 5, 6, 2, partial_charge)
 
 
 def char_to_ix(x, allowable_set):
@@ -155,7 +157,7 @@ def masking_feature(feature, num_masking, erase_rate, list_prob):
 def mol2graph(smi):
     mol = Chem.MolFromSmiles(smi)
 
-    X = np.zeros((MAX_LEN, 5), dtype=np.uint8)
+    X = np.zeros((MAX_LEN, 6), dtype=np.float32)
     A = np.zeros((MAX_LEN, MAX_LEN), dtype=np.uint8)
     P = np.zeros(MAX_LEN, dtype=np.float32)
 
@@ -163,10 +165,12 @@ def mol2graph(smi):
     num_atom = temp_A.shape[0]
     A[:num_atom, :num_atom] = temp_A + np.eye(temp_A.shape[0], dtype=np.uint8)
 
+    rdPartialCharges.ComputeGasteigerCharges(mol)
+
     for i, atom in enumerate(mol.GetAtoms()):
         feature = atom_feature(atom)
         X[i, :] = feature
-        P[i] = LIST_PROB[feature[0]]
+        P[i] = LIST_PROB[int(feature[0])]
         if i + 1 >= num_atom: break
     P /= P.sum()
 
@@ -222,9 +226,9 @@ class BatchSampler(Sampler):
 
 
 class zincDataset(Dataset):
-    def __init__(self, data_path, filename, num_worker, save_cache=True, labels=['logP', 'mr', 'tpsa']):
+    def __init__(self, data_path, filename, num_worker, save_cache=True, labels=['logP', 'mr', 'tpsa', 'sas', 'mw']):
         # Make Label Index
-        label2idx = {'logP':0, 'mr':1, 'tpsa':2, 'sa':3}
+        label2idx = {'logP':0, 'mr':1, 'tpsa':2, 'sas':3, 'mw':4}
         self.label_idx = np.array([label2idx[label] for label in labels])
 
         # Find whether cache is exist
@@ -256,8 +260,7 @@ class zincDataset(Dataset):
             print("Molecular Property Normalization Complete!")
 
             # Get Property Matrix
-            # self.C = self.data[['logP', 'mr', 'tpsa', 'sa']].values
-            self.C = self.data[['logP', 'mr', 'tpsa']].values
+            self.C = self.data[['logP', 'mr', 'tpsa', 'sas', 'mw']].values
             self.L = self.data['length']
             smiles = self.data.smile.values
             del self.data
@@ -287,5 +290,7 @@ class zincDataset(Dataset):
 
 
 if __name__ == '__main__':
-    a = './dataset/data_xs/train/train000000.csv'
-    dataset = zincDataset(a)
+    # a = './dataset/data_xxs/train/train000000.csv'
+    a = './dataset/xxs/train/'
+    f = 'train000000.csv'
+    dataset = zincDataset(a, f, 8)
