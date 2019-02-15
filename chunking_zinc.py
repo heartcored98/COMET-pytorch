@@ -34,15 +34,12 @@ def process_dataset(chunk_size,
             print("Passed    {} {:4}/{:4} files  Elap: {:6.1f} sec".format(
                     filename, idx + 1, len(list_file), time.time() - ts))
 
-
-
     te = time.time()
 
     # Report Work
     print("======================================================================================")
     print("Processing Completed! Processed {} files  Took {:5.1f} sec. ".format(cnt_file, te-ts))
     print("======================================================================================")
-
 
 
 if __name__ == '__main__':
@@ -54,7 +51,6 @@ if __name__ == '__main__':
     parser.add_argument("-d", "--raw_dir_path", help="directory where dataset stored", type=str, default='./raw_zinc_smiles')
 
     args = parser.parse_args()
-
 
     process_dataset(chunk_size=args.chunk_size,
                     raw_dir_path=args.raw_dir_path,
