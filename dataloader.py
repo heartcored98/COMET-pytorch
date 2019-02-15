@@ -52,7 +52,7 @@ def atom_feature(atom):
                     char_to_ix(atom.GetTotalNumHs(), [0, 1, 2, 3, 4]) +
                     char_to_ix(atom.GetImplicitValence(), [0, 1, 2, 3, 4, 5]) +
                     char_to_ix(int(atom.GetIsAromatic()), [0, 1]) +
-                    [atom.GetProp('_GasteigerCharge')])    # (40, 6, 5, 6, 2, partial_charge)
+                    [atom.GetProp('_GasteigerCharge')])    # (40, 6, 5, 6, 2, partial_charge) = 60 dim
 
 
 def char_to_ix(x, allowable_set):
@@ -116,20 +116,21 @@ def postprocess_batch(mini_batch):
     de[de <= 0] = 1
     A = A / de
 
-    return torch.Tensor(predict_idx).long(), torch.Tensor(X).long(), torch.Tensor(mask_X).long(), torch.Tensor(true_X).long(), torch.Tensor(A).float(), torch.Tensor(C).float()
+    #return torch.Tensor(predict_idx).long(), torch.Tensor(X).float(), torch.Tensor(mask_X).float(), torch.Tensor(true_X).float(), torch.Tensor(A).float(), torch.Tensor(C).float()
+    return torch.Tensor(mask_X).float(), torch.Tensor(A).float(), torch.Tensor(C).float(), torch.Tensor(true_X).float(), torch.Tensor(predict_idx).long()
 
 
 def masking_feature(feature, num_masking, erase_rate, list_prob):
-    """ Given feature, select 'num_masking' node feature and perturbate them.
+    """ Given feature, select 'num_masking' node features and perturbate them.
     
-        [5 features : Atom symbol, degree, num Hs, valence, isAromatic]  
+        [6 features : Atom symbol, degree, num Hs, valence, isAromatic, partial charge]
         were masked with zero or changed with random one-hot encoding 
-        or remained with origianl data(but still should be predicted).
+        or remained with original data(but still should be predicted).
         
-        Masking process was conducted on each feature indiviually. 
+        Masking process was conducted on each feature individually.
         For example, if ERASE_RATE = 0.5, probability for all feature information with zero is 0.5^5 = 0.03125
         
-        return original hode feature with their corresponding indices
+        return original node feature with their corresponding indices
     """
     ERASE_RATE = erase_rate
     
@@ -150,6 +151,7 @@ def masking_feature(feature, num_masking, erase_rate, list_prob):
             masked_feature[i, 2] = np.random.randint(1, 6)
             masked_feature[i, 3] = np.random.randint(1, 7)
             masked_feature[i, 4] = np.random.randint(1, 3)
+            masked_feature[i, 5] = 8 * np.random.random_sample() - 4
 
     return masked_feature, ground_truth, masking_indices
 
@@ -181,7 +183,7 @@ def preprocess_df(smiles, num_worker):
     with mp.Pool(processes=num_worker) as pool:
         mols = pool.map(mol2graph, smiles)
     X, A, P = list(zip(*mols))
-    X = np.array(X, dtype=np.uint8)
+    X = np.array(X, dtype=np.float32)
     A = np.array(A, dtype=np.uint8)
     P = np.array(P, dtype=np.float32)
     return X, A, P
@@ -288,9 +290,15 @@ class zincDataset(Dataset):
         L = self.L[index]
         return X, A, C, P, L
 
+from numpy import load
 
 if __name__ == '__main__':
     # a = './dataset/data_xxs/train/train000000.csv'
-    a = './dataset/xxs/train/'
-    f = 'train000000.csv'
+    a = './dataset/xxs/val/'
+    f = 'val000000.csv'
     dataset = zincDataset(a, f, 8)
+
+
+
+
+
