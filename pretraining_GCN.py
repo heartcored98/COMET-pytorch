@@ -10,6 +10,7 @@ from utils import *
 from model import *
 from metric import *
 
+# TODO: Merge with pretraining_GCN.ipynb
 
 #######################
 #===== Optimizer =====#
@@ -392,6 +393,7 @@ def experiment(dataloader, args):
     args.elapsed = te-ts
     logger.info('Training Completed')
 
+
 if __name__ == '__main__':
     seed = 123
     np.random.seed(seed)
@@ -434,7 +436,7 @@ if __name__ == '__main__':
     parser.add_argument("-rc", "--r_lambda", type=float, default=1.0)
 
     # ===== Training =====#
-    parser.add_argument("-aux", "--aux_task", nargs='+', default=['logP', 'mr', 'tpsa'])
+    parser.add_argument("-aux", "--aux_task", nargs='+', default=['logP', 'mr', 'tpsa', 'sas', 'mw'])
     parser.add_argument("-mr", "--masking_rate", type=float, default=0.2)
     parser.add_argument("-R", "--radius", type=int, default=2)
     parser.add_argument("-er", "--erase_rate", type=float, default=0.8)

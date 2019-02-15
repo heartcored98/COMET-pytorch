@@ -116,8 +116,8 @@ def postprocess_batch(mini_batch):
     de[de <= 0] = 1
     A = A / de
 
-    #return torch.Tensor(predict_idx).long(), torch.Tensor(X).float(), torch.Tensor(mask_X).float(), torch.Tensor(true_X).float(), torch.Tensor(A).float(), torch.Tensor(C).float()
-    return torch.Tensor(mask_X).float(), torch.Tensor(A).float(), torch.Tensor(C).float(), torch.Tensor(true_X).float(), torch.Tensor(predict_idx).long()
+    return torch.Tensor(predict_idx).long(), torch.Tensor(X).float(), torch.Tensor(mask_X).float(), torch.Tensor(true_X).float(), torch.Tensor(A).float(), torch.Tensor(C).float()
+    # return torch.Tensor(mask_X).float(), torch.Tensor(A).float(), torch.Tensor(C).float(), torch.Tensor(true_X).float(), torch.Tensor(predict_idx).long()
 
 
 def masking_feature(feature, num_masking, erase_rate, list_prob):

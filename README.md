@@ -34,6 +34,7 @@ COMET(Chemically Omnipotent Molecular Encoder from Transformer)
     - [X] modify dataloader handling partial charge, molecular property   
     - [X] modify training to minimize SAS, MW loss along other molecular properties 
     - [X] modify masking to mask partial charge   
+    - [ ] code refactoring
 
     
 # Dataset  

@@ -8,7 +8,7 @@ from sklearn.model_selection import train_test_split
 from rdkit import Chem
 from rdkit.Chem.Descriptors import ExactMolWt
 from rdkit.Chem.Crippen import MolLogP, MolMR
-from rdkit.Chem.rdMolDescriptors import CalcTPSA #,CalcPBF
+from rdkit.Chem.rdMolDescriptors import CalcTPSA
 import pandas as df
 import re
 import numpy as np
@@ -146,7 +146,6 @@ def process_dataset(chunk_size,
                 last_train_ck = len(train_row_buffer) // temp_size
                 print("Train Checkpoint Saved with train{:06d}.csv CK:{}".format(cnt_train_chunk, last_train_ck))
 
-
             if len(val_row_buffer) < chunk_size and len(val_row_buffer) // temp_size > last_val_ck:
                 df_val = df.DataFrame.from_records(val_row_buffer, columns=label_columns)
                 df_val = df_val.dropna()
@@ -222,7 +221,6 @@ if __name__ == '__main__':
     parser.add_argument("-o", "--output_dir_path", help="directory where processed data saved", type=str, default='./dataset/s')
 
     args = parser.parse_args()
-
 
     process_dataset(chunk_size=args.chunk_size,
                     temp_size=args.temp_size,
