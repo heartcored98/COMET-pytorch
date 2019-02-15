@@ -25,16 +25,15 @@ COMET(Chemically Omnipotent Molecular Encoder from Transformer)
     - [ ] Data Loader : Masked A would provide  
     - [ ] Model : A should be calculate from previous A.   
     
-- [ ] branch_partial_charge_atom_feature  
+- [X] branch_partial_charge_atom_feature  
     - [X] Add SAS, MW molecular property
     - [X] Preprocess Zinc to csv files (s, xs, xxs) 
     - [X] Add partial charge atom feature
     - [X] Check tensor type (watch for long tensor)  
     - [X] modify dataset handling partial charge, molecular property  
-    - [X] modify dataloader handling partial charge, molecular property  
-    - [ ] fix dataloader problem (postprocess_batch gives wrong input)
-    - [ ] modify training to minimize SAS, MW loss along other molecular properties 
-    - [ ] modify masking to mask partial charge   
+    - [X] modify dataloader handling partial charge, molecular property   
+    - [X] modify training to minimize SAS, MW loss along other molecular properties 
+    - [X] modify masking to mask partial charge   
 
     
 # Dataset  
