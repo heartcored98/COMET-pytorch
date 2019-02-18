@@ -44,7 +44,8 @@ LIST_PROB = [2.3993241881917855e-05, 8.444776409026159e-09, 5.054594488705504e-0
 LOGP_MEAN, LOGP_STD = 3.0475299537604004, 1.4508318866361838
 MR_MEAN, MR_STD = 1.983070758071883, 0.07702976853699765
 TPSA_MEAN, TPSA_STD = 1.8082864863018322, 0.1832254436608209
-
+SAS_MEAN, SAS_STD = 3.069722853731146, 0.5539645982715253
+MW_MEAN, MW_STD = 2.5516416454719937, 0.08920037918400488
 
 def atom_feature(atom):
     return np.array(char_to_ix(atom.GetSymbol(), LIST_SYMBOLS) +
@@ -52,7 +53,12 @@ def atom_feature(atom):
                     char_to_ix(atom.GetTotalNumHs(), [0, 1, 2, 3, 4]) +
                     char_to_ix(atom.GetImplicitValence(), [0, 1, 2, 3, 4, 5]) +
                     char_to_ix(int(atom.GetIsAromatic()), [0, 1]) +
-                    [atom.GetProp('_GasteigerCharge')])    # (40, 6, 5, 6, 2, partial_charge) = 60 dim
+                    [atom.GetProp('_GasteigerCharge')])    # (41, 7, 6, 7, 3, 1) = 65
+
+
+def atom_feature2(atom):
+    return np.array(char_to_ix(atom.GetSymbol(), LIST_SYMBOLS) +
+                    [atom.GetProp('_GasteigerCharge')])
 
 
 def char_to_ix(x, allowable_set):
@@ -253,12 +259,16 @@ class zincDataset(Dataset):
             self.data = self.data.reset_index()
             print("Dataset Loading Complete")
 
+
             # Mean & Std Normalize of molecular property
             self.data.logP = (self.data.logP - LOGP_MEAN) / LOGP_STD
             self.data.mr = np.log10(self.data.mr + 1)
             self.data.mr = (self.data.mr - MR_MEAN) / MR_STD
             self.data.tpsa= np.log10(self.data.tpsa + 1)
             self.data.tpsa = (self.data.tpsa - TPSA_MEAN) / TPSA_STD
+            self.data.sas = (self.data.sas - SAS_MEAN) / SAS_STD
+            self.data.mw = np.log10(self.data.mw + 1)
+            self.data.mw =  (self.data.mw - MW_MEAN) / MW_STD
             print("Molecular Property Normalization Complete!")
 
             # Get Property Matrix
@@ -290,7 +300,6 @@ class zincDataset(Dataset):
         L = self.L[index]
         return X, A, C, P, L
 
-from numpy import load
 
 if __name__ == '__main__':
     # a = './dataset/data_xxs/train/train000000.csv'
