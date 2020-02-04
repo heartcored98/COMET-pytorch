@@ -1,12 +1,12 @@
-
 from os.path import join
 import multiprocessing as mp
+from rdkit import Chem
+
 
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torch._six import int_classes as _int_classes
 from torch.utils.data.sampler import Sampler, SequentialSampler
-from rdkit import Chem
 from scipy.linalg import fractional_matrix_power
 import numpy as np
 from numpy.linalg import matrix_power
@@ -222,7 +222,7 @@ class BatchSampler(Sampler):
 
 
 class zincDataset(Dataset):
-    def __init__(self, data_path, filename, num_worker, save_cache=True, labels=['logP', 'mr', 'tpsa']):
+    def __init__(self, data_path, filename, num_worker=0, save_cache=True, labels=['logP', 'mr', 'tpsa']):
         # Make Label Index
         label2idx = {'logP':0, 'mr':1, 'tpsa':2, 'sa':3}
         self.label_idx = np.array([label2idx[label] for label in labels])
@@ -288,4 +288,8 @@ class zincDataset(Dataset):
 
 if __name__ == '__main__':
     a = './dataset/data_xs/train/train000000.csv'
-    dataset = zincDataset(a)
+
+    dataset_path = './dataset/bal_s/train/'
+    train_file = 'train000000.csv'
+
+    dataset = zincDataset(dataset_path, train_file)
