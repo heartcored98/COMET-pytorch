@@ -1,7 +1,7 @@
 import time
 import argparse
 
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 from sklearn.metrics import mean_absolute_error
 
 import dataloader
@@ -390,9 +390,9 @@ if __name__ == '__main__':
 
 
     parser.add_argument("-ep", "--epoch", type=int, default=10)
-    parser.add_argument("-bs", "--batch_size", type=int, default=512)
+    parser.add_argument("-bs", "--batch_size", type=int, default=1024)
     parser.add_argument("-tbs", "--test_batch_size", type=int, default=2048)
-    parser.add_argument("-nw", "--num_workers", type=int, default=12)
+    parser.add_argument("-nw", "--num_workers", type=int, default=16)
 
     # ===== Logging =====#
     parser.add_argument("-li", "--log_every", type=int, default= 10)  # Test: 10  #Default 40*10
